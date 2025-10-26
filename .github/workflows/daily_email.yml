@@ -20,17 +20,10 @@ jobs:
         with:
           python-version: '3.9'
       
-      - name: 安装系统依赖
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-      
       - name: 安装Python依赖包
         run: |
           pip install --upgrade pip
-          pip install pandas numpy yfinance requests
-          pip install TA-Lib
-          pip install smtplib
+          pip install requests
       
       - name: 发送邮件
         env:
@@ -38,7 +31,7 @@ jobs:
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: |
-          python3 "【邮箱提示】指标提醒.py"
+          python3 "云服务自动发送邮件.py"
       
       - name: 发送结果
         if: always()
