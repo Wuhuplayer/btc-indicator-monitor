@@ -20,12 +20,24 @@ jobs:
         with:
           python-version: '3.9'
       
+      - name: 安装系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential wget
+      
       - name: 安装Python依赖包
         run: |
           pip install --upgrade pip
-          pip install pandas numpy yfinance talib requests
-          sudo apt-get update
-          sudo apt-get install -y build-essential
+          pip install pandas numpy yfinance requests
+          # 安装TA-Lib
+          wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+          tar -xzf ta-lib-0.4.0-src.tar.gz
+          cd ta-lib/
+          ./configure --prefix=/usr
+          make
+          sudo make install
+          cd ..
+          pip install TA-Lib
       
       - name: 发送完整版BTC技术指标报告
         env:
