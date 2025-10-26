@@ -47,7 +47,7 @@ jobs:
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: |
-          python3 "完整版BTC监控.py"
+          python3 "原始完整版监控.py"
       
       - name: 发送结果
         if: always()
