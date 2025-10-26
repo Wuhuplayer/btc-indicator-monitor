@@ -1226,11 +1226,6 @@ class BTCIndicatorMonitor:
     <td>{'超卖区' if row['wt1'] < -30 else '中性区' if row['wt1'] < 0 else '超买区'}</td>
   </tr>
   <tr>
-    <td><strong>WT2</strong></td>
-    <td>{row['wt2']:.1f}</td>
-    <td>{'中性区' if row['wt2'] < 0 else '超买区'}</td>
-  </tr>
-  <tr>
     <td><strong>WT交叉</strong></td>
     <td style="color: {'green' if row['wt1'] > row['wt2'] else 'red'}; font-weight: bold;">{'金叉' if row['wt1'] > row['wt2'] else '死叉'}</td>
     <td>WT1({row['wt1']:.1f}) {'>' if row['wt1'] > row['wt2'] else '<'} WT2({row['wt2']:.1f})</td>
@@ -1249,16 +1244,6 @@ class BTCIndicatorMonitor:
     <td><strong>SQZMOM</strong></td>
     <td style="color: {'green' if row['sqz_off'] else 'red' if row['sqz_on'] else 'gray'}; font-weight: bold;">{'释放' if row['sqz_off'] else '挤压' if row['sqz_on'] else '无'}</td>
     <td>{'可以做多' if row['sqz_off'] else '观望' if row['sqz_on'] else '无信号'}</td>
-  </tr>
-  <tr>
-    <td><strong>挤压动能值</strong></td>
-    <td style="color: {'green' if row.get('sqz_val', 0) > 0 else 'red'}; font-weight: bold;">{row.get('sqz_val', 0):+.1f}</td>
-    <td>动能增强</td>
-  </tr>
-  <tr>
-    <td><strong>挤压动能柱</strong></td>
-    <td style="color: {'#00ff00' if row.get('is_lime') else 'green' if row.get('is_green') else 'red' if row.get('is_red') else 'maroon'}; font-weight: bold;">{'绿色' if row.get('is_lime') or row.get('is_green') else '红色'}</td>
-    <td>动能向上</td>
   </tr>
 </table>
 
