@@ -47,7 +47,7 @@ jobs:
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: |
-          python3 "正确版邮箱提示.py"
+          python3 "最终邮箱版本.py"
       
       - name: 发送结果
         if: always()
