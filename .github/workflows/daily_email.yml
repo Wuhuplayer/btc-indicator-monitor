@@ -20,6 +20,10 @@ jobs:
         with:
           python-version: '3.9'
       
+      - name: 预延时，避免SMTP风控
+        run: |
+          echo "sleep 10 to avoid SMTP rate-limit" && sleep 10
+      
       - name: 安装Python依赖包
         run: |
           pip install --upgrade pip

@@ -13,6 +13,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
+import smtplib
 
 def get_btc_price():
     """获取当前BTC价格（多数据源+重试）"""
@@ -106,7 +107,8 @@ def send_email(subject, body):
     msg['Subject'] = subject
     msg.attach(MIMEText(body, 'html'))
 
-    # 重试3次
+    # 重试3次，指数退避
+    backoffs = [15, 35, 60]
     last_err = None
     for attempt in range(1, 4):
         ok, err = _smtp_try_send(msg, email_config)
@@ -115,7 +117,8 @@ def send_email(subject, body):
             return True
         last_err = err
         print(f"⚠️ 发送失败(第{attempt}次): {err}")
-        time.sleep(8)
+        if attempt < 3:
+            time.sleep(backoffs[attempt-1])
 
     print(f"❌ 邮件发送最终失败: {last_err}")
     return False
