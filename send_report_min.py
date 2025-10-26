@@ -67,18 +67,26 @@ def _smtp_try_send(msg, cfg):
     """尝试两种方式发送邮件，返回(bool, err)"""
     # 方式1: SSL 465
     try:
-        with smtplib.SMTP_SSL(cfg['smtp_server'], 465, timeout=20) as server:
-            server.login(cfg['sender_email'], cfg['sender_password'])
-            server.sendmail(cfg['sender_email'], [cfg['receiver_email']], msg.as_string())
+        server = smtplib.SMTP_SSL(cfg['smtp_server'], 465, timeout=20)
+        server.login(cfg['sender_email'], cfg['sender_password'])
+        server.sendmail(cfg['sender_email'], [cfg['receiver_email']], msg.as_string())
+        try:
+            server.quit()
+        except:
+            pass  # 忽略QQ SMTP的QUIT异常
         return True, None
     except Exception as e_ssl:
         # 方式2: STARTTLS 587
         try:
-            with smtplib.SMTP(cfg['smtp_server'], 587, timeout=20) as server:
-                server.ehlo()
-                server.starttls()
-                server.login(cfg['sender_email'], cfg['sender_password'])
-                server.sendmail(cfg['sender_email'], [cfg['receiver_email']], msg.as_string())
+            server = smtplib.SMTP(cfg['smtp_server'], 587, timeout=20)
+            server.ehlo()
+            server.starttls()
+            server.login(cfg['sender_email'], cfg['sender_password'])
+            server.sendmail(cfg['sender_email'], [cfg['receiver_email']], msg.as_string())
+            try:
+                server.quit()
+            except:
+                pass  # 忽略QQ SMTP的QUIT异常
             return True, None
         except Exception as e_tls:
             return False, f"SSL:{e_ssl} | STARTTLS:{e_tls}"

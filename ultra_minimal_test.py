@@ -25,10 +25,14 @@ body = "<html><body><h1>Test OK</h1><p>Price: $112,460</p></body></html>"
 msg.attach(MIMEText(body, 'html', 'utf-8'))
 
 try:
-    with smtplib.SMTP_SSL('smtp.qq.com', 465, timeout=30) as server:
-        server.login(sender, password)
-        server.sendmail(sender, [receiver], msg.as_string())
+    server = smtplib.SMTP_SSL('smtp.qq.com', 465, timeout=30)
+    server.login(sender, password)
+    server.sendmail(sender, [receiver], msg.as_string())
     print("✅ 邮件发送成功")
+    try:
+        server.quit()
+    except:
+        pass  # 忽略QQ SMTP的QUIT异常
 except Exception as e:
     print(f"❌ 失败: {e}")
     exit(1)
