@@ -76,7 +76,7 @@ class SimpleBTCIndicatorMonitor:
         try:
             # 使用Binance API获取最近数据
             end_time = int(datetime.now().timestamp() * 1000)
-            start_time = end_time - (30 * 24 * 60 * 60 * 1000)  # 最近30天
+            start_time = end_time - (90 * 24 * 60 * 60 * 1000)  # 最近90天，确保有足够数据计算指标
             
             url = "https://api.binance.com/api/v3/klines"
             params = {
@@ -111,6 +111,7 @@ class SimpleBTCIndicatorMonitor:
                     print(f"✅ 成功获取 {len(df)} 天数据")
                     print(f"📅 数据区间: {df['date'].min().strftime('%Y-%m-%d')} 至 {df['date'].max().strftime('%Y-%m-%d')}")
                     print(f"💰 价格区间: ${df['close'].min():.2f} - ${df['close'].max():.2f}")
+                    print(f"📊 最新价格: ${df['close'].iloc[-1]:,.2f} (日期: {df['date'].iloc[-1].strftime('%Y-%m-%d')})")
                     
                     return df
                 
@@ -119,7 +120,10 @@ class SimpleBTCIndicatorMonitor:
         
         # 备用：生成模拟数据
         print("使用模拟数据...")
-        dates = pd.date_range(start='2024-01-01', end='2024-12-31', freq='D')
+        # 生成从2024年1月到今天的日期范围
+        from datetime import datetime
+        today = datetime.now()
+        dates = pd.date_range(start='2024-01-01', end=today.strftime('%Y-%m-%d'), freq='D')
         price = 50000
         prices = []
         
