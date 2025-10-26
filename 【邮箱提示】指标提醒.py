@@ -113,24 +113,42 @@ class BTCIndicatorMonitor:
             
             # 发送邮件（QQ邮箱使用SSL，修复QUIT异常）
             if 'qq.com' in self.email_config['smtp_server']:
+                print(f"📧 使用QQ邮箱发送邮件到: {self.email_config['receiver_email']}")
                 server = smtplib.SMTP_SSL(self.email_config['smtp_server'], 465, timeout=30)
                 server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
+                print(f"📧 登录成功，开始发送邮件...")
+                
+                # 添加邮件头信息，提高送达率
+                msg['X-Mailer'] = 'BTC-Monitor-System'
+                msg['X-Priority'] = '3'
+                
+                result = server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
+                print(f"📧 邮件发送结果: {result}")
+                
                 try:
                     server.quit()
+                    print(f"📧 SMTP连接已关闭")
                 except:
                     pass  # 忽略QQ SMTP的QUIT异常
             else:
+                print(f"📧 使用其他邮箱发送邮件到: {self.email_config['receiver_email']}")
                 server = smtplib.SMTP(self.email_config['smtp_server'], self.email_config['smtp_port'], timeout=30)
                 server.starttls()
                 server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
+                print(f"📧 登录成功，开始发送邮件...")
+                
+                result = server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
+                print(f"📧 邮件发送结果: {result}")
+                
                 try:
                     server.quit()
+                    print(f"📧 SMTP连接已关闭")
                 except:
                     pass
             
             print(f"✅ 邮件已发送: {subject}")
+            print(f"📧 请检查邮箱: {self.email_config['receiver_email']}")
+            print(f"📧 如果没收到，请检查垃圾邮件文件夹")
             return True
             
         except Exception as e:
