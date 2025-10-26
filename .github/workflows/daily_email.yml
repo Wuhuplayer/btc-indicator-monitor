@@ -26,7 +26,6 @@ jobs:
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: |
-          cd "【！！最新TV技术指标策略】/策略库"
           python3 "【邮箱提示】指标提醒.py"
       
       - name: 发送结果
