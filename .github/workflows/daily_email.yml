@@ -20,12 +20,27 @@ jobs:
         with:
           python-version: '3.9'
       
+      - name: 安装系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential wget
+      
+      - name: 安装TA-Lib
+        run: |
+          wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+          tar -xzf ta-lib-0.4.0-src.tar.gz
+          cd ta-lib/
+          ./configure --prefix=/usr
+          make
+          sudo make install
+          cd ..
+          sudo ldconfig
+      
       - name: 安装Python依赖包
         run: |
           pip install --upgrade pip
           pip install pandas numpy yfinance requests
-          # 使用预编译的TA-Lib wheel
-          pip install --find-links https://github.com/TA-Lib/ta-lib-python/releases TA-Lib
+          pip install TA-Lib
       
       - name: 测试邮箱配置
         env:
