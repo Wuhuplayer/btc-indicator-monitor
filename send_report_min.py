@@ -62,33 +62,63 @@ def get_btc_price():
     print("❌ 获取价格失败: " + " | ".join(errors))
     return None
 
-def send_email(subject, body):
-    """发送邮件"""
+def _smtp_try_send(msg, cfg):
+    """尝试两种方式发送邮件，返回(bool, err)"""
+    # 方式1: SSL 465
     try:
-        email_config = {
-            'smtp_server': 'smtp.qq.com',
-            'sender_email': os.getenv('SENDER_EMAIL', '350980368@qq.com'),
-            'sender_password': os.getenv('EMAIL_PASSWORD', 'vortuxxxhkgubidh'),
-            'receiver_email': os.getenv('RECEIVER_EMAIL', '350980368@qq.com')
-        }
-        
-        msg = MIMEMultipart('alternative')
-        msg['From'] = email_config['sender_email']
-        msg['To'] = email_config['receiver_email']
-        msg['Subject'] = subject
-        
-        msg.attach(MIMEText(body, 'html'))
-        
-        with smtplib.SMTP_SSL('smtp.qq.com', 465) as server:
-            server.login(email_config['sender_email'], email_config['sender_password'])
+        with smtplib.SMTP_SSL(cfg['smtp_server'], 465, timeout=20) as server:
+            server.login(cfg['sender_email'], cfg['sender_password'])
             server.send_message(msg)
-        
-        print(f"✅ 邮件发送成功: {subject}")
-        return True
-        
-    except Exception as e:
-        print(f"❌ 邮件发送失败: {e}")
+        return True, None
+    except Exception as e_ssl:
+        # 方式2: STARTTLS 587
+        try:
+            with smtplib.SMTP(cfg['smtp_server'], 587, timeout=20) as server:
+                server.ehlo()
+                server.starttls()
+                server.login(cfg['sender_email'], cfg['sender_password'])
+                server.send_message(msg)
+            return True, None
+        except Exception as e_tls:
+            return False, f"SSL:{e_ssl} | STARTTLS:{e_tls}"
+
+def send_email(subject, body):
+    """发送邮件（带诊断与重试）"""
+    email_config = {
+        'smtp_server': 'smtp.qq.com',
+        'sender_email': os.getenv('SENDER_EMAIL', ''),
+        'sender_password': os.getenv('EMAIL_PASSWORD', ''),
+        'receiver_email': os.getenv('RECEIVER_EMAIL', '')
+    }
+
+    # 轻量校验Secrets是否注入（不输出明文）
+    def mask(s):
+        return f"len={len(s)}" if s else "EMPTY"
+    print(f"🔐 Secrets 检查 -> SENDER_EMAIL:{mask(email_config['sender_email'])}, PASSWORD:{mask(email_config['sender_password'])}, RECEIVER_EMAIL:{mask(email_config['receiver_email'])}")
+
+    if not email_config['sender_email'] or not email_config['sender_password'] or not email_config['receiver_email']:
+        print("❌ Secrets 未注入完整，终止发送")
         return False
+
+    msg = MIMEMultipart('alternative')
+    msg['From'] = email_config['sender_email']
+    msg['To'] = email_config['receiver_email']
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'html'))
+
+    # 重试3次
+    last_err = None
+    for attempt in range(1, 4):
+        ok, err = _smtp_try_send(msg, email_config)
+        if ok:
+            print(f"✅ 邮件发送成功: {subject} (attempt={attempt})")
+            return True
+        last_err = err
+        print(f"⚠️ 发送失败(第{attempt}次): {err}")
+        time.sleep(8)
+
+    print(f"❌ 邮件发送最终失败: {last_err}")
+    return False
 
 def main():
     print("🚀 启动简化版BTC监控...")
