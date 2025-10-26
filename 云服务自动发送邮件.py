@@ -10,6 +10,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 import os
+import requests
+import pandas as pd
+import numpy as np
 
 def send_daily_report():
     """发送每日报告"""
