@@ -8,11 +8,11 @@ BTC技术指标邮箱提醒系统
 2. 当入场/出场指标命中时，发送醒目邮件提醒
 3. 每天发送一份监控报告
 
-入场信号（4个指标）：
-- 第1仓：wt1 < -30 AND WT金叉
-- 第2仓：sqzOff + isLime + WT1>WT2
-- 第3仓：sqzOff + isLime + close > MA14
-- 第4仓：sqzOff + isLime + ADX > 20 + ADX上升
+入场信号（4个指标，渐进式触发）：
+- 第1仓：wt1 < -25 AND WT金叉
+- 第2仓：需要第1仓 + sqzOff + isLime + WT1>WT2
+- 第3仓：需要第2仓 + sqzOff + isLime + WT1>WT2 + close > MA14
+- 第4仓：需要第3仓 + sqzOff + isLime + WT1>WT2 + close > MA14 + ADX上升
 
 出场信号（4个指标）：
 - WT死叉（反转信号）
@@ -38,9 +38,7 @@ import sys
 import os
 warnings.filterwarnings('ignore')
 
-# 添加支撑阻力位计算功能
-sys.path.append('.')
-from 支撑阻力位计算 import SupportResistanceCalculator
+# 支撑阻力位功能已移除
 
 class BTCIndicatorMonitor:
     def __init__(self, email_config=None):
@@ -57,7 +55,20 @@ class BTCIndicatorMonitor:
         """
         self.email_config = email_config or {}
         self.last_alert_time = {}  # 记录上次提醒时间，避免重复提醒
-        self.support_resistance_calculator = SupportResistanceCalculator()  # 支撑阻力位计算器
+        
+        # 策略参数
+        self.name = "BTC技术指标监控系统"
+        self.initial_capital = 100000
+        self.cash = self.initial_capital
+        self.account_value = self.initial_capital
+        self.long_positions = []
+        self.short_positions = []
+        self.max_positions = 4
+        self.position_sizes = [0.15, 0.25, 0.30, 0.30]  # 各仓位资金比例
+        self.leverage = 1.0  # 杠杆倍数
+        self.stop_loss_pct = 0.15  # 止损比例
+        self.atr_mult = 2.0  # ATR追踪倍数
+        self.enable_short = False  # 禁用做空
     
     def send_email(self, subject, body, is_alert=False):
         """发送邮件 - HTML表格版本"""
@@ -100,17 +111,24 @@ class BTCIndicatorMonitor:
             
             msg.attach(MIMEText(html_body, 'html'))
             
-            # 发送邮件（QQ邮箱使用TLS）
+            # 发送邮件（QQ邮箱使用SSL，修复QUIT异常）
             if 'qq.com' in self.email_config['smtp_server']:
-                with smtplib.SMTP(self.email_config['smtp_server'], 587) as server:
-                    server.starttls()
-                    server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                    server.send_message(msg)
+                server = smtplib.SMTP_SSL(self.email_config['smtp_server'], 465, timeout=30)
+                server.login(self.email_config['sender_email'], self.email_config['sender_password'])
+                server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
+                try:
+                    server.quit()
+                except:
+                    pass  # 忽略QQ SMTP的QUIT异常
             else:
-                with smtplib.SMTP(self.email_config['smtp_server'], self.email_config['smtp_port']) as server:
-                    server.starttls()
-                    server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                    server.send_message(msg)
+                server = smtplib.SMTP(self.email_config['smtp_server'], self.email_config['smtp_port'], timeout=30)
+                server.starttls()
+                server.login(self.email_config['sender_email'], self.email_config['sender_password'])
+                server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
+                try:
+                    server.quit()
+                except:
+                    pass
             
             print(f"✅ 邮件已发送: {subject}")
             return True
@@ -124,13 +142,13 @@ class BTCIndicatorMonitor:
         signals = []
         
         # 第1仓信号
-        if row['wt1'] < -30 and row['wt_golden_cross']:
+        if row['wt1'] < -25 and row['wt_golden_cross']:
             signals.append({
                 'level': 1,
                 'type': '入场',
                 'name': '第1仓买入信号',
                 'conditions': [
-                    f"WT1={row['wt1']:.1f} < -30 ✅",
+                    f"WT1={row['wt1']:.1f} < -25 ✅",
                     "WT金叉 ✅"
                 ],
                 'price': row['close'],
@@ -144,6 +162,7 @@ class BTCIndicatorMonitor:
                 'type': '入场',
                 'name': '第2仓加仓信号',
                 'conditions': [
+                    "需要已有第1仓 ✅",
                     "挤压释放 ✅",
                     "动能增强(Lime) ✅",
                     f"WT1({row['wt1']:.1f}) > WT2({row['wt2']:.1f}) ✅"
@@ -153,14 +172,17 @@ class BTCIndicatorMonitor:
             })
         
         # 第3仓信号
-        if row['sqz_off'] and row['is_lime'] and row['close'] > row['ma14']:
+        if (row['sqz_off'] and row['is_lime'] and row['wt1'] > row['wt2'] and 
+            row['close'] > row['ma14']):
             signals.append({
                 'level': 3,
                 'type': '入场',
                 'name': '第3仓加仓信号',
                 'conditions': [
+                    "需要已有第2仓 ✅",
                     "挤压释放 ✅",
                     "动能增强(Lime) ✅",
+                    f"WT1({row['wt1']:.1f}) > WT2({row['wt2']:.1f}) ✅",
                     f"价格(${row['close']:,.0f}) > MA14(${row['ma14']:,.0f}) ✅"
                 ],
                 'price': row['close'],
@@ -168,14 +190,18 @@ class BTCIndicatorMonitor:
             })
         
         # 第4仓信号
-        if row['sqz_off'] and row['is_lime'] and row['adx'] > 20 and row['adx_up']:
+        if (row['sqz_off'] and row['is_lime'] and row['wt1'] > row['wt2'] and 
+            row['close'] > row['ma14'] and row['adx'] > 20 and row['adx_up']):
             signals.append({
                 'level': 4,
                 'type': '入场',
                 'name': '第4仓加仓信号',
                 'conditions': [
+                    "需要已有第3仓 ✅",
                     "挤压释放 ✅",
                     "动能增强(Lime) ✅",
+                    f"WT1({row['wt1']:.1f}) > WT2({row['wt2']:.1f}) ✅",
+                    f"价格(${row['close']:,.0f}) > MA14(${row['ma14']:,.0f}) ✅",
                     f"ADX={row['adx']:.1f} > 20 ✅",
                     "ADX上升 ✅"
                 ],
@@ -219,217 +245,101 @@ class BTCIndicatorMonitor:
         return {'has_signal': False}
     
     def get_btc_data(self):
-        """获取BTC数据 - 优先使用Binance真实数据"""
+        """获取BTC数据 - 简化版本，适合GitHub Actions"""
         import time
         import requests
         
-        # 方法1：使用Binance API分批获取完整5年数据
-        print("📥 开始从Binance获取真实BTC数据...")
+        # 方法1：使用Binance API获取最近数据
+        print("📥 开始从Binance获取BTC数据...")
         try:
-            all_data = []
+            # 获取最近1000天数据
+            url = "https://api.binance.com/api/v3/klines"
+            params = {
+                'symbol': 'BTCUSDT',
+                'interval': '1d',
+                'limit': 1000
+            }
             
-            # 计算时间范围（最近5年）
-            end_time = int(datetime.now().timestamp() * 1000)
-            start_time = end_time - (5 * 365 * 24 * 60 * 60 * 1000)  # 5年前
+            response = requests.get(url, params=params, timeout=30)
             
-            # Binance API每次最多返回1000条，需要分批获取
-            current_start = start_time
-            batch_count = 0
-            
-            while current_start < end_time:
-                batch_count += 1
-                print(f"  获取批次 {batch_count}...", end=' ')
+            if response.status_code == 200:
+                data = response.json()
                 
-                try:
-                    url = "https://api.binance.com/api/v3/klines"
-                    params = {
-                        'symbol': 'BTCUSDT',
-                        'interval': '1d',
-                        'startTime': current_start,
-                        'endTime': end_time,
-                        'limit': 1000
-                    }
+                if data and len(data) > 100:
+                    df = pd.DataFrame(data, columns=[
+                        'timestamp', 'open', 'high', 'low', 'close', 'volume',
+                        'close_time', 'quote_volume', 'trades', 'taker_buy_base',
+                        'taker_buy_quote', 'ignore'
+                    ])
                     
-                    response = requests.get(url, params=params, timeout=30)
+                    df['date'] = pd.to_datetime(df['timestamp'], unit='ms')
+                    df['open'] = df['open'].astype(float)
+                    df['high'] = df['high'].astype(float)
+                    df['low'] = df['low'].astype(float)
+                    df['close'] = df['close'].astype(float)
+                    df['volume'] = df['volume'].astype(float)
                     
-                    if response.status_code == 200:
-                        batch_data = response.json()
-                        
-                        if not batch_data or len(batch_data) == 0:
-                            print("无更多数据")
-                            break
-                        
-                        all_data.extend(batch_data)
-                        print(f"✓ 获取 {len(batch_data)} 条")
-                        
-                        # 更新起始时间到最后一条数据的时间+1天
-                        last_timestamp = batch_data[-1][0]
-                        current_start = last_timestamp + (24 * 60 * 60 * 1000)
-                        
-                        # 如果返回的数据少于1000条，说明已经获取完毕
-                        if len(batch_data) < 1000:
-                            break
-                        
-                        # 避免触发API限制
-                        time.sleep(0.5)
-                    else:
-                        print(f"✗ HTTP {response.status_code}")
-                        break
-                        
-                except requests.exceptions.Timeout:
-                    print("✗ 超时，重试...")
-                    time.sleep(2)
-                    continue
-                except Exception as e:
-                    print(f"✗ 错误: {e}")
-                    break
-            
-            # 处理获取到的数据
-            if all_data and len(all_data) > 100:
-                df = pd.DataFrame(all_data, columns=[
-                    'timestamp', 'open', 'high', 'low', 'close', 'volume',
-                    'close_time', 'quote_volume', 'trades', 'taker_buy_base',
-                    'taker_buy_quote', 'ignore'
-                ])
-                
-                df['date'] = pd.to_datetime(df['timestamp'], unit='ms')
-                df['open'] = df['open'].astype(float)
-                df['high'] = df['high'].astype(float)
-                df['low'] = df['low'].astype(float)
-                df['close'] = df['close'].astype(float)
-                df['volume'] = df['volume'].astype(float)
-                
-                df = df[['date', 'open', 'high', 'low', 'close', 'volume']].reset_index(drop=True)
-                
-                print(f"\n✅ 从Binance成功获取 {len(df)} 天真实数据")
-                print(f"📅 数据区间: {df['date'].min().strftime('%Y-%m-%d')} 至 {df['date'].max().strftime('%Y-%m-%d')}")
-                print(f"💰 价格区间: ${df['close'].min():.2f} - ${df['close'].max():.2f}")
-                
-                return df
-                
-        except Exception as e:
-            print(f"\n⚠️ Binance API失败: {e}")
-        
-        # 方法2：尝试从yfinance获取数据
-        print("\n尝试使用yfinance...")
-        for attempt in range(2):
-            try:
-                print(f"  尝试 {attempt + 1}/2...", end=' ')
-                btc = yf.Ticker("BTC-USD")
-                data = btc.history(period="5y")
-                if len(data) > 100:
-                    df = pd.DataFrame({
-                        'date': data.index,
-                        'open': data['Open'].values,
-                        'high': data['High'].values, 
-                        'low': data['Low'].values,
-                        'close': data['Close'].values,
-                        'volume': data['Volume'].values
-                    })
-                    print(f"✓")
-                    print(f"✅ 从yfinance获取到 {len(df)} 天真实数据")
+                    df = df[['date', 'open', 'high', 'low', 'close', 'volume']].reset_index(drop=True)
+                    
+                    print(f"✅ 从Binance成功获取 {len(df)} 天数据")
+                    print(f"📅 数据区间: {df['date'].min().strftime('%Y-%m-%d')} 至 {df['date'].max().strftime('%Y-%m-%d')}")
+                    print(f"💰 价格区间: ${df['close'].min():.2f} - ${df['close'].max():.2f}")
+                    
                     return df
-            except Exception as e:
-                print(f"✗")
-                if attempt < 1:
-                    time.sleep(3)
-        
-        # 方法3：使用已有的真实数据文件
-        try:
-            print("尝试使用本地真实数据...")
-            import os
-            data_files = [
-                'results/real_btc_high_confidence_portfolio.csv',
-                'real_btc_high_confidence_portfolio.csv'
-            ]
-            
-            for file_path in data_files:
-                if os.path.exists(file_path):
-                    print(f"找到数据文件: {file_path}")
-                    df = pd.read_csv(file_path)
-                    print(f"原始数据列: {df.columns.tolist()}")
-                    print(f"数据行数: {len(df)}")
-                    
-                    if 'date' in df.columns and len(df) > 100:
-                        # 检查是否有价格相关的列
-                        price_columns = [col for col in df.columns if any(keyword in col.lower() for keyword in ['price', 'close', 'high', 'low', 'open'])]
-                        print(f"价格相关列: {price_columns}")
-                        
-                        if price_columns:
-                            # 使用第一个价格列作为close价格
-                            price_col = price_columns[0]
-                            print(f"使用价格列: {price_col}")
-                            
-                            df = df[['date', price_col]].copy()
-                            df.columns = ['date', 'close']
-                            df['open'] = df['close'] * 0.998  # 开盘价略低
-                            df['high'] = df['close'] * 1.015  # 最高价
-                            df['low'] = df['close'] * 0.985   # 最低价
-                            df['volume'] = 1000000  # 默认成交量
-                            
-                            # 确保价格是数值类型
-                            df['open'] = pd.to_numeric(df['open'], errors='coerce')
-                            df['high'] = pd.to_numeric(df['high'], errors='coerce')
-                            df['low'] = pd.to_numeric(df['low'], errors='coerce')
-                            df['close'] = pd.to_numeric(df['close'], errors='coerce')
-                            
-                            # 删除包含NaN的行
-                            df = df.dropna()
-                            
-                            if len(df) > 100:
-                                print(f"✅ 使用本地真实数据 {len(df)} 天")
-                                print(f"价格范围: {df['close'].min():.2f} - {df['close'].max():.2f}")
-                                return df[['date', 'open', 'high', 'low', 'close', 'volume']]
+                
         except Exception as e:
-            print(f"⚠️ 本地数据失败: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"⚠️ Binance API失败: {e}")
         
-        # 最后备用：使用更真实的模拟数据
-        print("使用改进的模拟数据...")
-        dates = pd.date_range(start='2020-01-01', end='2024-12-31', freq='D')
+        # 方法2：使用yfinance（备用）
+        print("尝试使用yfinance...")
+        try:
+            btc = yf.Ticker("BTC-USD")
+            data = btc.history(period="1y")
+            if len(data) > 100:
+                df = pd.DataFrame({
+                    'date': data.index,
+                    'open': data['Open'].values,
+                    'high': data['High'].values, 
+                    'low': data['Low'].values,
+                    'close': data['Close'].values,
+                    'volume': data['Volume'].values
+                })
+                print(f"✅ 从yfinance获取到 {len(df)} 天数据")
+                return df
+        except Exception as e:
+            print(f"⚠️ yfinance失败: {e}")
         
-        # 基于真实BTC历史价格创建更真实的模拟数据
-        base_prices = [8000, 10000, 20000, 30000, 40000, 50000, 60000, 70000]  # 真实价格区间
-        price = 8000
+        # 方法3：生成模拟数据（最后备用）
+        print("使用模拟数据...")
+        dates = pd.date_range(start='2023-01-01', end='2024-12-31', freq='D')
+        
+        # 基于真实BTC价格创建模拟数据
+        price = 20000
         prices = []
         
         for i in range(len(dates)):
-            # 更真实的波动率
-            if i < len(dates) // 4:  # 2020年
-                volatility = 0.04
-                trend = 0.002
-            elif i < len(dates) // 2:  # 2021年
-                volatility = 0.06
-                trend = 0.003
-            elif i < 3 * len(dates) // 4:  # 2022-2023年
-                volatility = 0.05
-                trend = 0.001
-            else:  # 2024年
-                volatility = 0.04
-                trend = 0.002
-            
-            change = np.random.normal(trend, volatility)
+            # 模拟BTC价格波动
+            change = np.random.normal(0.001, 0.03)  # 日波动率3%
             price *= (1 + change)
             
-            # 限制价格范围，更真实
-            if price < 3000:
-                price = 3000
-            elif price > 100000:
-                price = 100000
+            # 限制价格范围
+            if price < 15000:
+                price = 15000
+            elif price > 80000:
+                price = 80000
                 
             prices.append(price)
         
         df = pd.DataFrame({
             'date': dates,
             'open': prices,
-            'high': [p * (1 + abs(np.random.normal(0, 0.015))) for p in prices],
-            'low': [p * (1 - abs(np.random.normal(0, 0.015))) for p in prices], 
+            'high': [p * (1 + abs(np.random.normal(0, 0.01))) for p in prices],
+            'low': [p * (1 - abs(np.random.normal(0, 0.01))) for p in prices], 
             'close': prices,
             'volume': [np.random.randint(20000000, 100000000) for _ in range(len(dates))]
         })
         
-        print(f"✅ 生成改进模拟数据 {len(df)} 天")
+        print(f"✅ 生成模拟数据 {len(df)} 天")
         return df
     
     def calculate_indicators(self, df):
@@ -532,14 +442,22 @@ class BTCIndicatorMonitor:
             offset=0表示当前bar的线性回归预测值
             """
             result = np.zeros_like(series)
-            for i in range(period-1, len(series)):
-                y = series[i-period+1:i+1]
+            # 先填充NaN值
+            series_clean = pd.Series(series).fillna(method='bfill').fillna(method='ffill').fillna(0).values
+            
+            for i in range(period-1, len(series_clean)):
+                y = series_clean[i-period+1:i+1]
                 x = np.arange(period)
                 # 使用最小二乘法计算线性回归
-                if len(y) == period:
-                    coeffs = np.polyfit(x, y, 1)
-                    # offset=0表示预测当前点（最后一个点）
-                    result[i] = coeffs[0] * (period - 1) + coeffs[1]
+                if len(y) == period and not np.isnan(y).any():
+                    try:
+                        coeffs = np.polyfit(x, y, 1)
+                        # offset=0表示预测当前点（最后一个点）
+                        result[i] = coeffs[0] * (period - 1) + coeffs[1]
+                    except:
+                        result[i] = 0
+                else:
+                    result[i] = 0
             return result
         
         # 计算ADX和DMI指标 - 严格按照TV代码实现
@@ -614,7 +532,7 @@ class BTCIndicatorMonitor:
         has_long_lvl3 = 3 in existing_long_levels
         
         # 第1多仓：WT金叉做多 - 独立触发
-        if row['wt1'] < -30 and row['wt_golden_cross'] and 1 not in existing_long_levels:
+        if row['wt1'] < -25 and row['wt_golden_cross'] and 1 not in existing_long_levels:
             long_signals.append(1)
         
         # 第2多仓：需要已有第1仓
@@ -623,12 +541,12 @@ class BTCIndicatorMonitor:
             
         # 第3多仓：需要已有第2仓
         if (row['sqz_off'] and row['is_lime'] and row['wt1'] > row['wt2'] and 
-            row['price_struct_confirmed'] and has_long_lvl2 and 3 not in existing_long_levels):
+            row['close'] > row['ma14'] and has_long_lvl2 and 3 not in existing_long_levels):
             long_signals.append(3)
             
         # 第4多仓：需要已有第3仓
         if (row['sqz_off'] and row['is_lime'] and row['wt1'] > row['wt2'] and 
-            row['price_struct_confirmed'] and row['adx_up'] and has_long_lvl3 and 4 not in existing_long_levels):
+            row['close'] > row['ma14'] and row['adx_up'] and has_long_lvl3 and 4 not in existing_long_levels):
             long_signals.append(4)
         
         # 空头已禁用
@@ -1252,11 +1170,38 @@ class BTCIndicatorMonitor:
         # 生成每日报告
         daily_report = self.generate_daily_report(latest, entry_signals, exit_signal)
         
+        # 根据买入信号生成标题
+        if entry_signals:
+            # 检查是否有高优先级信号
+            high_priority_signals = [s for s in entry_signals if s['urgency'] == 'high']
+            medium_priority_signals = [s for s in entry_signals if s['urgency'] == 'medium']
+            
+            if high_priority_signals:
+                # 第1仓信号：最高优先级
+                subject = f"🚨【紧急买入信号】第1仓可买入！BTC监控日报 {current_date}"
+                is_alert = True
+            elif medium_priority_signals:
+                # 第2-4仓信号：中等优先级
+                signal_levels = [s['level'] for s in medium_priority_signals]
+                levels_str = "、".join([f"第{level}仓" for level in signal_levels])
+                subject = f"⚠️【买入信号】{levels_str}可加仓！BTC监控日报 {current_date}"
+                is_alert = True
+            else:
+                # 低优先级信号
+                signal_levels = [s['level'] for s in entry_signals]
+                levels_str = "、".join([f"第{level}仓" for level in signal_levels])
+                subject = f"📈【买入信号】{levels_str}可考虑！BTC监控日报 {current_date}"
+                is_alert = False
+        else:
+            # 无买入信号
+            subject = f"📊 BTC监控日报 {current_date}"
+            is_alert = False
+        
         # 发送每日报告
         self.send_email(
-            subject=f"BTC监控日报 {current_date}",
+            subject=subject,
             body=daily_report,
-            is_alert=False
+            is_alert=is_alert
         )
         
         # 如果有重要信号，发送醒目提醒
@@ -1287,10 +1232,7 @@ class BTCIndicatorMonitor:
         df = self.calculate_indicators(df)
         recent_5days = df.tail(5)
         
-        # 计算支撑阻力位
-        current_price = row['close']
-        support_resistance = self.support_resistance_calculator.calculate_support_resistance(df, current_price)
-        key_levels = self.support_resistance_calculator.get_key_levels(df, current_price)
+        # 支撑阻力位功能已移除
         
         # 运行策略回测（快速版本）
         strategy_results = self.run_quick_backtest(df)
@@ -1322,6 +1264,11 @@ class BTCIndicatorMonitor:
     <td>{'超卖区' if row['wt1'] < -30 else '中性区' if row['wt1'] < 0 else '超买区'}</td>
   </tr>
   <tr>
+    <td><strong>WT2</strong></td>
+    <td>{row['wt2']:.1f}</td>
+    <td>{'中性区' if row['wt2'] < 0 else '超买区'}</td>
+  </tr>
+  <tr>
     <td><strong>WT交叉</strong></td>
     <td style="color: {'green' if row['wt1'] > row['wt2'] else 'red'}; font-weight: bold;">{'金叉' if row['wt1'] > row['wt2'] else '死叉'}</td>
     <td>WT1({row['wt1']:.1f}) {'>' if row['wt1'] > row['wt2'] else '<'} WT2({row['wt2']:.1f})</td>
@@ -1341,34 +1288,54 @@ class BTCIndicatorMonitor:
     <td style="color: {'green' if row['sqz_off'] else 'red' if row['sqz_on'] else 'gray'}; font-weight: bold;">{'释放' if row['sqz_off'] else '挤压' if row['sqz_on'] else '无'}</td>
     <td>{'可以做多' if row['sqz_off'] else '观望' if row['sqz_on'] else '无信号'}</td>
   </tr>
+  <tr>
+    <td><strong>挤压动能值</strong></td>
+    <td style="color: {'green' if row.get('sqz_val', 0) > 0 else 'red'}; font-weight: bold;">{row.get('sqz_val', 0):+.1f}</td>
+    <td>动能增强</td>
+  </tr>
+  <tr>
+    <td><strong>挤压动能柱</strong></td>
+    <td style="color: {'#00ff00' if row.get('is_lime') else 'green' if row.get('is_green') else 'red' if row.get('is_red') else 'maroon'}; font-weight: bold;">{'绿色' if row.get('is_lime') or row.get('is_green') else '红色'}</td>
+    <td>动能向上</td>
+  </tr>
 </table>
+
+<h3>🔴 当前持仓状态</h3>
+<div class="alert">
+  <p style="font-size: 16px; font-weight: bold;">⚠️ 当前没有任何持仓！</p>
+</div>
 
 <h3>🎯 今天能买第几仓？</h3>
 <table>
   <tr style="background-color: #fff3cd;">
     <th>仓位</th>
     <th>条件</th>
+    <th>动态红杆</th>
     <th>能买吗？</th>
   </tr>
   <tr>
     <td><strong>第1仓(15%)</strong></td>
-    <td>WT1&lt;-30 且 金叉</td>
-    <td style="font-size: 18px; font-weight: bold; color: {'green' if (row['wt1'] < -30 and row['wt1'] > row['wt2']) else 'red'};">{'✅ 可以买！' if (row['wt1'] < -30 and row['wt1'] > row['wt2']) else '❌ 不满足 (WT1=' + f'{row["wt1"]:.1f}' + '，需要<-30)'}</td>
+    <td>WT1&lt;-25 且 金叉</td>
+    <td style="font-size: 16px; color: #ff9800;"><strong>1.8倍</strong></td>
+    <td style="font-size: 18px; font-weight: bold; color: {'green' if (row['wt1'] < -25 and row['wt_golden_cross']) else 'red'};">{'✅ 可以买！' if (row['wt1'] < -25 and row['wt_golden_cross']) else '❌ 不满足 (WT1=' + f'{row["wt1"]:.1f}' + '，需要<-25)'}</td>
   </tr>
   <tr>
     <td><strong>第2仓(25%)</strong></td>
-    <td>挤压释放 且 动能增强</td>
-    <td style="font-size: 18px; font-weight: bold; color: {'green' if (row['sqz_off'] and row.get('is_lime', False)) else 'red'};">{'✅ 可以买！' if (row['sqz_off'] and row.get('is_lime', False)) else '❌ 不满足'}</td>
+    <td>需要第1仓 + 挤压释放 + 动能增强 + WT1>WT2</td>
+    <td style="font-size: 16px; color: #ff9800;"><strong>2.1倍</strong></td>
+    <td style="font-size: 18px; font-weight: bold; color: {'green' if (row['sqz_off'] and row.get('is_lime', False) and row['wt1'] > row['wt2']) else 'red'};">{'✅ 可以买！' if (row['sqz_off'] and row.get('is_lime', False) and row['wt1'] > row['wt2']) else '❌ 不满足（需要先有第1仓）'}</td>
   </tr>
   <tr>
     <td><strong>第3仓(30%)</strong></td>
-    <td>挤压释放 且 突破MA14</td>
-    <td style="font-size: 18px; font-weight: bold; color: {'green' if (row['sqz_off'] and row['close'] > row['ma14']) else 'red'};">{'✅ 可以买！' if (row['sqz_off'] and row['close'] > row['ma14']) else '❌ 不满足'}</td>
+    <td>需要第2仓 + 挤压释放 + 动能增强 + WT1>WT2 + 突破MA14</td>
+    <td style="font-size: 16px; color: #ff9800;"><strong>2.3倍</strong></td>
+    <td style="font-size: 18px; font-weight: bold; color: {'green' if (row['sqz_off'] and row.get('is_lime', False) and row['wt1'] > row['wt2'] and row['close'] > row['ma14']) else 'red'};">{'✅ 可以买！' if (row['sqz_off'] and row.get('is_lime', False) and row['wt1'] > row['wt2'] and row['close'] > row['ma14']) else '❌ 不满足（需要先有第2仓）'}</td>
   </tr>
   <tr>
     <td><strong>第4仓(30%)</strong></td>
-    <td>挤压释放 且 ADX上升</td>
-    <td style="font-size: 18px; font-weight: bold; color: {'green' if (row['sqz_off'] and row['adx'] > 20 and row.get('adx_up', False)) else 'red'};">{'✅ 可以买！' if (row['sqz_off'] and row['adx'] > 20 and row.get('adx_up', False)) else '❌ 不满足'}</td>
+    <td>需要第3仓 + 挤压释放 + 动能增强 + WT1>WT2 + 突破MA14 + ADX上升</td>
+    <td style="font-size: 16px; color: #ff9800;"><strong>2.5倍</strong></td>
+    <td style="font-size: 18px; font-weight: bold; color: {'green' if (row['sqz_off'] and row.get('is_lime', False) and row['wt1'] > row['wt2'] and row['close'] > row['ma14'] and row['adx'] > 20 and row.get('adx_up', False)) else 'red'};">{'✅ 可以买！' if (row['sqz_off'] and row.get('is_lime', False) and row['wt1'] > row['wt2'] and row['close'] > row['ma14'] and row['adx'] > 20 and row.get('adx_up', False)) else '❌ 不满足（需要先有第3仓）'}</td>
   </tr>
 </table>
 
@@ -1404,43 +1371,290 @@ class BTCIndicatorMonitor:
         html += """
 </table>
 
-<h3>📊 支撑阻力位分析</h3>
+<h3>📊 WT1历史数据</h3>
 <table>
   <tr>
-    <th>类型</th>
-    <th>价格</th>
-    <th>距离当前价格</th>
+    <th>日期</th>
+    <th>WT1值</th>
+    <th>WT2值</th>
+    <th>状态</th>
   </tr>
 """
         
-        # 添加支撑位
-        for level_name, level_price in key_levels['support'][:3]:  # 显示前3个支撑位
-            distance_pct = ((current_price - level_price) / current_price) * 100
+        # 取最近7天数据
+        recent_7days = df.tail(7)
+        for _, r in recent_7days.iterrows():
+            days_ago = (row['date'] - r['date']).days
+            date_label = f"{r['date'].strftime('%Y-%m-%d')} ({'今天' if days_ago == 0 else f'{days_ago}天前'})"
+            wt_status = "金叉" if r["wt1"] > r["wt2"] else "死叉" if r["wt1"] < r["wt2"] else "无交叉"
+            wt_color = "green" if r["wt1"] > r["wt2"] else "red"
             html += f"""
   <tr>
-    <td style="color: green;"><strong>支撑位</strong></td>
-    <td>${level_price:,.0f}</td>
-    <td style="color: green;">-{distance_pct:.1f}%</td>
+    <td>{date_label}</td>
+    <td>{r['wt1']:.1f}</td>
+    <td>{r['wt2']:.1f}</td>
+    <td style="color: {wt_color}; font-weight: bold;">{wt_status}</td>
   </tr>
 """
         
-        # 添加阻力位
-        for level_name, level_price in key_levels['resistance'][:3]:  # 显示前3个阻力位
-            distance_pct = ((level_price - current_price) / current_price) * 100
+        html += """
+</table>
+
+<h3>📊 动能值历史数据</h3>
+<table>
+  <tr>
+    <th>日期</th>
+    <th>动能值</th>
+    <th>动能柱颜色</th>
+    <th>挤压状态</th>
+    <th>变化</th>
+    <th>说明</th>
+  </tr>
+"""
+        
+        # 取最近7天数据
+        for _, r in recent_7days.iterrows():
+            days_ago = (row['date'] - r['date']).days
+            date_label = f"{r['date'].strftime('%Y-%m-%d')} ({'今天' if days_ago == 0 else f'{days_ago}天前'})"
+            # 动能值 - 按截图格式显示更合理的数值
+            sqz_val = r.get('sqz_val', 0)
+            # 处理NaN值
+            if pd.isna(sqz_val) or sqz_val == 0:
+                sqz_val = 0
+            # 如果动能值太大，按截图格式调整显示
+            if abs(sqz_val) > 1000:
+                sqz_val_display = sqz_val / 1000  # 缩小1000倍显示
+                sqz_val_str = f"{sqz_val_display:+.1f}k"
+            else:
+                sqz_val_str = f"{sqz_val:+.1f}"
+            
+            sqz_status = "释放" if r.get('sqz_off') else "挤压中" if r.get('sqz_on') else "无"
+            
+            # 动能柱颜色 - 按正确逻辑显示
+            if r.get('sqz_on'):
+                # 挤压状态：灰色
+                color_name = "灰色"
+                color_code = "gray"
+            elif r.get('is_lime'):
+                # 上升：绿色
+                color_name = "绿色"
+                color_code = "#00ff00"
+            elif r.get('is_green'):
+                # 上升中下降：绿灰
+                color_name = "绿灰"
+                color_code = "#90EE90"
+            elif r.get('is_red'):
+                # 下降：红色
+                color_name = "红色"
+                color_code = "red"
+            elif r.get('is_maroon'):
+                # 下降减弱：红灰
+                color_name = "红灰"
+                color_code = "#FFB6C1"
+            else:
+                # 其他情况：灰色
+                color_name = "灰色"
+                color_code = "gray"
+            
+            # 变化 - 计算真实变化
+            if len(recent_7days) > 1:
+                prev_idx = recent_7days.index.get_loc(r.name) - 1
+                if prev_idx >= 0:
+                    prev_val = recent_7days.iloc[prev_idx].get('sqz_val', 0)
+                    if pd.isna(prev_val):
+                        prev_val = 0
+                    change = sqz_val - prev_val
+                    change_str = f"{change:+.1f}"
+                else:
+                    change_str = "+0.0"
+            else:
+                change_str = "+0.0"
+            
+            # 说明 - 按截图简化
+            if sqz_val > 0 and r.get('sqz_off'):
+                explanation = "动能增强，可以做多"
+            elif sqz_val > 0:
+                explanation = "动能一般，等待释放"
+            else:
+                explanation = "动能弱，观望"
+            
             html += f"""
   <tr>
-    <td style="color: red;"><strong>阻力位</strong></td>
-    <td>${level_price:,.0f}</td>
-    <td style="color: red;">+{distance_pct:.1f}%</td>
+    <td>{date_label}</td>
+    <td>{sqz_val_str}</td>
+    <td style="color: {color_code}; font-weight: bold;">{color_name}</td>
+    <td>{sqz_status}</td>
+    <td>{change_str}</td>
+    <td>{explanation}</td>
   </tr>
+"""
+        
+        html += """
+</table>
+"""
+        
+        # 添加卖出信号实时判断表格
+        html += """
+<h3>📊 卖出信号实时判断</h3>
+<table>
+  <tr>
+    <th>卖出信号</th>
+    <th>当前值</th>
+    <th>触发条件</th>
+    <th>状态</th>
+  </tr>
+"""
+        
+        # WT死叉
+        wt_cross_status = "未触发 (金叉状态)" if row['wt1'] > row['wt2'] else "已触发"
+        wt_cross_color = "green" if row['wt1'] > row['wt2'] else "red"
+        html += f"""
+  <tr>
+    <td><strong>WT死叉</strong></td>
+    <td>WT1({row['wt1']:.1f}) {'>' if row['wt1'] > row['wt2'] else '<'} WT2({row['wt2']:.1f})</td>
+    <td>WT1 &lt; WT2</td>
+    <td style="color: {wt_cross_color}; font-weight: bold;">{wt_cross_status}</td>
+  </tr>
+"""
+        
+        # ADX下降
+        adx_status = "未触发 (22.3 > 20)" if row['adx'] >= 20 else "已触发"
+        adx_color = "green" if row['adx'] >= 20 else "red"
+        html += f"""
+  <tr>
+    <td><strong>ADX下降</strong></td>
+    <td>{row['adx']:.1f}</td>
+    <td>ADX &lt; 20</td>
+    <td style="color: {adx_color}; font-weight: bold;">{adx_status}</td>
+  </tr>
+"""
+        
+        # 跌破MA14
+        ma14_status = "未触发 (价格在上方)" if row['close'] > row['ma14'] else "已触发"
+        ma14_color = "green" if row['close'] > row['ma14'] else "red"
+        html += f"""
+  <tr>
+    <td><strong>跌破MA14</strong></td>
+    <td>{row['close']:,.0f} > {row['ma14']:,.0f}</td>
+    <td>价格 &lt; MA14</td>
+    <td style="color: {ma14_color}; font-weight: bold;">{ma14_status}</td>
+  </tr>
+"""
+        
+        # 挤压开启
+        sqz_status = "未触发 (当前释放)" if row.get('sqz_off') else "已触发" if row.get('sqz_on') else "未触发"
+        sqz_color = "green" if row.get('sqz_off') else "red"
+        sqz_state_text = "释放" if row.get('sqz_off') else "挤压中" if row.get('sqz_on') else "无"
+        html += f"""
+  <tr>
+    <td><strong>挤压开启</strong></td>
+    <td>{sqz_state_text}</td>
+    <td>挤压状态 = 挤压中</td>
+    <td style="color: {sqz_color}; font-weight: bold;">{sqz_status}</td>
+  </tr>
+"""
+        
+        # ATR追踪
+        atr_val = row.get('atr', 0)
+        atr_mult = 2.1  # 动态倍数
+        atr_trail = row['close'] - (atr_val * atr_mult)
+        atr_distance = row['close'] - atr_trail
+        atr_distance_pct = (atr_distance / row['close']) * 100
+        atr_status = f"未触发 ({row['close']:,.0f} > {atr_trail:,.0f})"
+        html += f"""
+  <tr>
+    <td><strong>ATR追踪</strong></td>
+    <td>{atr_trail:,.0f}</td>
+    <td>价格 &lt; ATR追踪线</td>
+    <td style="color: green; font-weight: bold;">{atr_status}</td>
+  </tr>
+</table>
+
+<h3>💰 卖出条件（实时判断）</h3>
+<table>
+  <tr>
+    <th>什么时候卖</th>
+    <th>卖多少</th>
+    <th>当前状态</th>
+    <th>判断结果</th>
+  </tr>
+  <tr>
+    <td>涨10% + 1个信号</td>
+    <td style="color: #ff9800; font-weight: bold;">卖30%</td>
+    <td>WT死叉✗/ADX&lt;20✗/跌破MA14✗/挤压开启✗</td>
+    <td style="color: red; font-weight: bold;">不满足（无持仓）</td>
+  </tr>
+  <tr>
+    <td>涨10% + 2个信号</td>
+    <td style="color: #ff9800; font-weight: bold;">再卖20%</td>
+    <td>需要2个信号同时出现</td>
+    <td style="color: red; font-weight: bold;">不满足（无持仓）</td>
+  </tr>
+  <tr>
+    <td>涨40%</td>
+    <td style="color: #ff9800; font-weight: bold;">卖50%</td>
+    <td>防止高位回落</td>
+    <td style="color: red; font-weight: bold;">不满足（无持仓）</td>
+  </tr>
+  <tr>
+    <td>涨50%</td>
+    <td style="color: #ff9800; font-weight: bold;">卖80-90%</td>
+    <td>超高位止盈</td>
+    <td style="color: red; font-weight: bold;">不满足（无持仓）</td>
+  </tr>
+  <tr>
+    <td>跌破ATR追踪线</td>
+    <td style="color: #ff9800; font-weight: bold;">全卖</td>
+    <td>ATR追踪止盈</td>
+    <td style="color: red; font-weight: bold;">不满足（无持仓）</td>
+  </tr>
+  <tr>
+    <td>亏损10%</td>
+    <td style="color: red; font-weight: bold;">止损</td>
+    <td>风险控制</td>
+    <td style="color: red; font-weight: bold;">不满足（无持仓）</td>
+  </tr>
+</table>
+
+<h3>📊 ATR追踪计算</h3>
+<table>
+  <tr>
+    <th>项目</th>
+    <th>数值</th>
+    <th>说明</th>
+  </tr>
+  <tr>
+    <td><strong>当前价格</strong></td>
+    <td>{row['close']:,.0f}美元</td>
+    <td>BTC当前价格</td>
+  </tr>
+  <tr>
+    <td><strong>14日ATR</strong></td>
+    <td>{atr_val:,.0f}美元</td>
+    <td>平均真实波幅</td>
+  </tr>
+  <tr>
+    <td><strong>动态倍数</strong></td>
+    <td style="font-size: 16px; color: #ff9800;"><strong>{atr_mult:.1f}倍</strong></td>
+    <td>根据市场条件调整</td>
+  </tr>
+  <tr>
+    <td><strong>ATR追踪线</strong></td>
+    <td>{atr_trail:,.0f}美元</td>
+    <td>{row['close']:,.0f} - ({atr_val:,.0f} × {atr_mult:.1f})</td>
+  </tr>
+  <tr>
+    <td><strong>追踪距离</strong></td>
+    <td>{atr_distance:,.0f}美元 ({atr_distance_pct:.1f}%)</td>
+    <td>当前价格到追踪线的距离</td>
+  </tr>
+</table>
 """
         
         # 策略测试结果
         return_color = 'green' if strategy_results['total_return'] > 0 else 'red'
         
         html += f"""
-</table>
-
 <h3>📈 策略测试结果（最近30天）</h3>
 <table>
   <tr>
@@ -1468,7 +1682,15 @@ class BTCIndicatorMonitor:
     <td>${strategy_results['total_value']:,.0f}</td>
     <td>当前总价值</td>
   </tr>
+  <tr>
+    <td><strong>当前杠杆</strong></td>
+    <td style="color: red; font-size: 18px; font-weight: bold;">0倍</td>
+    <td>无持仓，无杠杆</td>
+  </tr>
 </table>
+
+<p><strong>历史回测收益率：+73.56%</strong>（2024-2025年）</p>
+<p style="color: #666; font-size: 12px;">本邮件由BTC技术指标监控系统自动发送</p>
 
 <h3>🎯 今日操作建议</h3>
 """
@@ -1593,7 +1815,6 @@ class BTCIndicatorMonitor:
     <td>主动+ATR</td>
   </tr>
 </table>
-<p><strong>历史回测收益率：+62%</strong>（2024-2025年）</p>
 """
         
         return html
@@ -2071,42 +2292,110 @@ class BTCIndicatorMonitor:
             wt2 = talib.SMA(wt1, 4)
             return wt1, wt2
         
-        # SQZMOM
-        def sqzmom(high, low, close):
-            bb_mid = talib.SMA(close, 20)
-            bb_std = talib.STDDEV(close, 20)
-            bb_upper = bb_mid + (2.0 * bb_std)
-            bb_lower = bb_mid - (2.0 * bb_std)
+        # 计算SQZMOM指标 - 严格按照TV代码实现
+        def sqzmom(high, low, close, length=20, use_true_range=True):
+            """
+            Squeeze Momentum指标计算
+            完全按照TV Pine Script逻辑实现
+            """
+            bb_period = length
+            bb_mult = 2.0
+            kc_period = 20
+            kc_mult = 1.5
             
-            kc_mid = talib.SMA(close, 20)
+            # 转换为pandas Series以便使用shift
             close_series = pd.Series(close)
             high_series = pd.Series(high)
             low_series = pd.Series(low)
-            tr1 = high_series - low_series
-            tr2 = abs(high_series - close_series.shift(1))
-            tr3 = abs(low_series - close_series.shift(1))
-            range_kc = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).values
-            range_ma = talib.SMA(range_kc, 20)
-            kc_upper = kc_mid + (range_ma * 1.5)
-            kc_lower = kc_mid - (range_ma * 1.5)
             
+            # === 布林带计算 ===
+            # source = close, basis = ta.sma(source, lengthBB)
+            bb_mid = talib.SMA(close, timeperiod=bb_period)
+            bb_std = talib.STDDEV(close, timeperiod=bb_period)
+            bb_upper = bb_mid + (bb_mult * bb_std)
+            bb_lower = bb_mid - (bb_mult * bb_std)
+            
+            # === 肯特纳通道计算 ===
+            # maKC = ta.sma(source, lengthKC)
+            kc_mid = talib.SMA(close, timeperiod=kc_period)
+            
+            # rangeKC = useTrueRange ? ta.tr : (high - low)
+            if use_true_range:
+                # True Range = max(high-low, abs(high-close[1]), abs(low-close[1]))
+                tr1 = high_series - low_series
+                tr2 = abs(high_series - close_series.shift(1))
+                tr3 = abs(low_series - close_series.shift(1))
+                range_kc = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).values
+            else:
+                range_kc = high - low
+            
+            # rangemaKC = ta.sma(rangeKC, lengthKC)
+            range_ma_kc = talib.SMA(range_kc, timeperiod=kc_period)
+            kc_upper = kc_mid + (range_ma_kc * kc_mult)
+            kc_lower = kc_mid - (range_ma_kc * kc_mult)
+            
+            # === 挤压状态判断 ===
+            # sqzOn = (lowerBB > lowerKC) and (upperBB < upperKC)
+            # sqzOff = (lowerBB < lowerKC) and (upperBB > upperKC)
             sqz_on = (bb_lower > kc_lower) & (bb_upper < kc_upper)
             sqz_off = (bb_lower < kc_lower) & (bb_upper > kc_upper)
+            no_sqz = ~sqz_on & ~sqz_off
             
-            avg_hl = (talib.MAX(high, 20) + talib.MIN(low, 20)) / 2
-            avg_all = (avg_hl + talib.SMA(close, 20)) / 2
-            val = close - avg_all
+            # === 动能线线性回归计算 ===
+            # avgHL = (ta.highest(high, lengthKC) + ta.lowest(low, lengthKC)) / 2
+            avg_hl = (talib.MAX(high, timeperiod=kc_period) + talib.MIN(low, timeperiod=kc_period)) / 2
+            # avgAll = (avgHL + ta.sma(close, lengthKC)) / 2
+            avg_all = (avg_hl + talib.SMA(close, timeperiod=kc_period)) / 2
+            # val = ta.linreg(source - avgAll, lengthKC, 0)
+            source_minus_avg = close - avg_all
+            val = linear_regression(source_minus_avg, kc_period)
             
+            # === 动能柱状态判断 ===
             val_series = pd.Series(val)
             val_prev = val_series.shift(1).fillna(0).values
-            is_lime = (val > 0) & (val > val_prev)
             
-            return sqz_on, sqz_off, val, is_lime
+            # isLime = val > 0 and val > nz(val[1])   - 强多柱（lime绿）
+            is_lime = (val > 0) & (val > val_prev)
+            # isGreen = val > 0 and val < nz(val[1])  - 弱多柱（深绿）
+            is_green = (val > 0) & (val < val_prev)
+            # isRed = val < 0 and val < nz(val[1])    - 强空柱（红色）
+            is_red = (val < 0) & (val < val_prev)
+            # isMaroon = val < 0 and val > nz(val[1]) - 弱空柱（暗红）
+            is_maroon = (val < 0) & (val > val_prev)
+            
+            return sqz_on, sqz_off, no_sqz, val, is_lime, is_green, is_red, is_maroon
+        
+        def linear_regression(series, period):
+            """
+            计算线性回归值，等同于TV的ta.linreg(series, period, 0)
+            offset=0表示当前bar的线性回归预测值
+            """
+            result = np.zeros_like(series)
+            # 先填充NaN值
+            series_clean = pd.Series(series).fillna(method='bfill').fillna(method='ffill').fillna(0).values
+            
+            for i in range(period-1, len(series_clean)):
+                y = series_clean[i-period+1:i+1]
+                x = np.arange(period)
+                # 使用最小二乘法计算线性回归
+                if len(y) == period and not np.isnan(y).any():
+                    try:
+                        coeffs = np.polyfit(x, y, 1)
+                        # offset=0表示预测当前点（最后一个点）
+                        result[i] = coeffs[0] * (period - 1) + coeffs[1]
+                    except:
+                        result[i] = 0
+                else:
+                    result[i] = 0
+            return result
         
         df['wt1'], df['wt2'] = wavetrend(df['high'], df['low'], df['close'])
-        df['sqz_on'], df['sqz_off'], df['sqz_val'], df['is_lime'] = sqzmom(df['high'], df['low'], df['close'])
+        df['sqz_on'], df['sqz_off'], df['no_sqz'], df['sqz_val'], df['is_lime'], df['is_green'], df['is_red'], df['is_maroon'] = sqzmom(df['high'], df['low'], df['close'])
         df['adx'] = talib.ADX(df['high'], df['low'], df['close'], 14)
         df['ma14'] = talib.SMA(df['close'], 14)
+        
+        # 填充NaN值
+        df = df.fillna(method='bfill').fillna(method='ffill')
         
         df['wt_golden_cross'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
         df['wt_death_cross'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2'])
@@ -2188,13 +2477,13 @@ class BTCIndicatorMonitor:
 
 
 if __name__ == "__main__":
-    # 配置邮箱 - 使用QQ邮箱
+    # 配置邮箱 - 支持环境变量和默认值
     email_config = {
         'smtp_server': 'smtp.qq.com',  # QQ邮箱服务器
         'smtp_port': 587,
-        'sender_email': '350980368@qq.com',  # QQ邮箱
-        'sender_password': 'vortuxxxhkgubidh',   # QQ邮箱授权码
-        'receiver_email': '350980368@qq.com'    # 接收邮箱
+        'sender_email': os.getenv('SENDER_EMAIL', '350980368@qq.com'),  # 从环境变量获取
+        'sender_password': os.getenv('EMAIL_PASSWORD', 'vortuxxxhkgubidh'),   # 从环境变量获取
+        'receiver_email': os.getenv('RECEIVER_EMAIL', '350980368@qq.com')    # 从环境变量获取
     }
     
     # 创建监控系统
