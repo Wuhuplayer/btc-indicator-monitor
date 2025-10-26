@@ -20,24 +20,12 @@ jobs:
         with:
           python-version: '3.9'
       
-      - name: 安装系统依赖
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential wget
-      
       - name: 安装Python依赖包
         run: |
           pip install --upgrade pip
           pip install pandas numpy yfinance requests
-          # 安装TA-Lib
-          wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
-          tar -xzf ta-lib-0.4.0-src.tar.gz
-          cd ta-lib/
-          ./configure --prefix=/usr
-          make
-          sudo make install
-          cd ..
-          pip install TA-Lib
+          # 使用预编译的TA-Lib wheel
+          pip install --find-links https://github.com/TA-Lib/ta-lib-python/releases TA-Lib
       
       - name: 发送完整版BTC技术指标报告
         env:
@@ -45,7 +33,7 @@ jobs:
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: |
-          python3 "【！！最新TV技术指标策略】/策略库/【邮箱提示】指标提醒.py"
+          python3 "完整版BTC监控.py"
       
       - name: 发送结果
         if: always()
