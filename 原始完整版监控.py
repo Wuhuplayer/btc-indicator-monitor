@@ -65,10 +65,14 @@ class BTCIndicatorMonitor:
         self.short_positions = []
         self.max_positions = 4
         self.position_sizes = [0.15, 0.25, 0.30, 0.30]  # 各仓位资金比例
-        self.leverage = 1.0  # 杠杆倍数
+        self.leverage = 1.0  # 基础杠杆
+        self.dynamic_leverage = True  # 启用动态杠杆
+        self.max_leverage = 5.0  # 最大杠杆5倍
+        self.min_leverage = 1.0  # 最小杠杆
         self.stop_loss_pct = 0.15  # 止损比例
         self.atr_mult = 2.0  # ATR追踪倍数
         self.enable_short = False  # 禁用做空
+        self.dynamic_risk_management = True  # 启用动态风险管理
     
     def send_email(self, subject, body, is_alert=False):
         """发送邮件 - HTML表格版本"""
@@ -509,6 +513,71 @@ class BTCIndicatorMonitor:
         print("✅ 技术指标计算完成")
         return df
     
+    def calculate_dynamic_leverage(self, row):
+        """动态杠杆计算 - 根据市场机会强度"""
+        if not self.dynamic_leverage:
+            return self.leverage
+        
+        # 计算市场机会评分(0-100)
+        score = 0
+        
+        # 趋势强度(最多40分)
+        if row['close'] > row['ma14']:
+            score += 15
+        if row['adx'] > 25:
+            score += 15
+        if row['adx'] > 20 and row.get('adx_up', False):
+            score += 10
+        
+        # 技术指标(最多40分)
+        if row['wt1'] > row['wt2']:
+            score += 15
+        if row['sqz_off'] and row.get('is_lime', False):
+            score += 15
+        if row['wt1'] < -30:
+            score += 10
+        
+        # 综合确认(最多20分)
+        if row.get('wt_golden_cross', False):
+            score += 10
+        if row.get('price_struct_confirmed', False):
+            score += 10
+        
+        # 根据评分计算杠杆(5档)
+        if score >= 80:
+            leverage = 5.0
+        elif score >= 65:
+            leverage = 4.0
+        elif score >= 50:
+            leverage = 3.0
+        elif score >= 35:
+            leverage = 2.0
+        else:
+            leverage = 1.0
+        
+        return max(self.min_leverage, min(self.max_leverage, leverage))
+    
+    def calculate_dynamic_risk_management(self, row, current_leverage):
+        """动态风险管理 - 根据杠杆调整止损"""
+        if not self.dynamic_risk_management:
+            return {'stop_loss_pct': self.stop_loss_pct, 'atr_mult': self.atr_mult}
+        
+        # 高杠杆收紧止损
+        if current_leverage >= 4.0:
+            stop_loss = self.stop_loss_pct * 0.7  # 收紧30%
+            atr_mult = self.atr_mult * 0.8
+        elif current_leverage >= 3.0:
+            stop_loss = self.stop_loss_pct * 0.8
+            atr_mult = self.atr_mult * 0.9
+        elif current_leverage >= 2.0:
+            stop_loss = self.stop_loss_pct * 0.9
+            atr_mult = self.atr_mult * 0.95
+        else:
+            stop_loss = self.stop_loss_pct
+            atr_mult = self.atr_mult
+        
+        return {'stop_loss_pct': stop_loss, 'atr_mult': atr_mult}
+    
     def check_entry_signals(self, row):
         """检查入场信号 - 纯多头：渐进式触发（无价格过滤）"""
         long_signals = []
@@ -545,8 +614,8 @@ class BTCIndicatorMonitor:
             
         return long_signals, short_signals
     
-    def add_position(self, date, price, position_level, direction='long'):
-        """添加仓位（支持做多和做空）"""
+    def add_position(self, date, price, position_level, direction='long', atr=None, row=None):
+        """添加仓位（支持做多和做空，动态杠杆）"""
         positions = self.long_positions if direction == 'long' else self.short_positions
         
         if len(positions) >= self.max_positions:
@@ -560,10 +629,18 @@ class BTCIndicatorMonitor:
             return False
         
         self.cash -= amount
+        
+        # 计算动态杠杆
+        if row is not None:
+            current_leverage = self.calculate_dynamic_leverage(row)
+            risk_params = self.calculate_dynamic_risk_management(row, current_leverage)
+        else:
+            current_leverage = self.leverage
+            risk_params = {'stop_loss_pct': self.stop_loss_pct, 'atr_mult': self.atr_mult}
 
         if direction == 'long':
-            # 做多：价格上涨赚钱（加杠杆）
-            leveraged_shares = (amount * self.leverage) / price  # 杠杆后的持仓数量
+            # 做多：价格上涨赚钱（加动态杠杆）
+            leveraged_shares = (amount * current_leverage) / price  # 动态杠杆后的持仓数量
             position = {
                 'date': date,
                 'entry_price': price,
@@ -571,14 +648,17 @@ class BTCIndicatorMonitor:
                 'shares': leveraged_shares,  # 杠杆后的实际持仓
                 'position_level': position_level,
                 'direction': 'long',
-                'stop_loss_price': price * (1 - self.stop_loss_pct),  # 止损价更低
+                'stop_loss_price': price * (1 - risk_params['stop_loss_pct']),  # 动态止损
                 'remaining_shares': leveraged_shares,
                 'sold_parts': 0,
                 'peak_price': price,  # 记录最高价
                 'trail_stop_price': None,
-                'leverage': self.leverage
+                'leverage': current_leverage,  # 保存动态杠杆
+                'risk_params': risk_params  # 保存风险参数
             }
             emoji = "📈"
+            leverage_text = f" 杠杆:{current_leverage:.1f}x" if current_leverage > 1.0 else ""
+            print(f"{emoji} 第{position_level}多仓入场: {date.strftime('%Y-%m-%d')} 价格:{price:.2f} 金额:{amount:.0f}{leverage_text}")
         else:
             # 做空：价格下跌赚钱（需要保证金）
             leveraged_shares = (amount * self.leverage) / price  # 杠杆后的空头数量
@@ -601,8 +681,10 @@ class BTCIndicatorMonitor:
             emoji = "📉"
         
         positions.append(position)
-        dir_text = "多" if direction == 'long' else "空"
-        print(f"{emoji} 第{position_level}{dir_text}仓入场: {date.strftime('%Y-%m-%d')} 价格:{price:.2f} 金额:{amount:.0f}")
+        # 打印已在上面添加（包含杠杆信息）
+        if direction == 'short':
+            dir_text = "空"
+            print(f"{emoji} 第{position_level}{dir_text}仓入场: {date.strftime('%Y-%m-%d')} 价格:{price:.2f} 金额:{amount:.0f}")
         return True
     
     def check_stop_loss(self, row, trades, trade_id):
@@ -976,7 +1058,7 @@ class BTCIndicatorMonitor:
             # 纯多头策略：只开多头
             for signal in long_signals:
                 if len(self.long_positions) < self.max_positions:
-                    self.add_position(row['date'], current_price, signal, direction='long')
+                    self.add_position(row['date'], current_price, signal, direction='long', atr=row.get('atr'), row=row)
             
             # 更新账户价值
             account_value = self.update_account_value(current_price)
@@ -1434,23 +1516,37 @@ class BTCIndicatorMonitor:
         
         html += f"""
 <hr>
-<h3>📋 策略说明</h3>
+<h3>📋 策略参数</h3>
 <table>
   <tr>
     <th>参数</th>
     <th>设置</th>
+    <th>说明</th>
   </tr>
   <tr>
-    <td><strong>杠杆倍数</strong></td>
-    <td style="font-size: 18px; color: #f44336;"><strong>{self.leverage}倍</strong></td>
+    <td><strong>杠杆模式</strong></td>
+    <td style="font-size: 18px; color: #f44336;"><strong>{'动态杠杆' if self.dynamic_leverage else '固定杠杆'}</strong></td>
+    <td>{'根据市场机会自动调整1-5倍' if self.dynamic_leverage else f'{self.leverage}倍固定'}</td>
+  </tr>
+  <tr>
+    <td><strong>杠杆范围</strong></td>
+    <td style="font-size: 16px; color: #ff9800;"><strong>{self.min_leverage}-{self.max_leverage}倍</strong></td>
+    <td>市场强度越高杠杆越大</td>
   </tr>
   <tr>
     <td><strong>止损比例</strong></td>
     <td>{self.stop_loss_pct*100}%</td>
+    <td>根据杠杆动态调整</td>
   </tr>
   <tr>
     <td><strong>初始资金</strong></td>
     <td>${self.initial_capital:,}</td>
+    <td>起始本金</td>
+  </tr>
+  <tr>
+    <td><strong>最大仓位</strong></td>
+    <td>{self.max_positions}仓</td>
+    <td>渐进式建仓</td>
   </tr>
 </table>
 
