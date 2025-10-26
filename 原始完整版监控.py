@@ -1432,9 +1432,29 @@ class BTCIndicatorMonitor:
         else:
             html += '<div class="success"><p>✅ 无卖出信号，继续持有</p></div>'
         
-        html += """
+        html += f"""
 <hr>
 <h3>📋 策略说明</h3>
+<table>
+  <tr>
+    <th>参数</th>
+    <th>设置</th>
+  </tr>
+  <tr>
+    <td><strong>杠杆倍数</strong></td>
+    <td style="font-size: 18px; color: #f44336;"><strong>{self.leverage}倍</strong></td>
+  </tr>
+  <tr>
+    <td><strong>止损比例</strong></td>
+    <td>{self.stop_loss_pct*100}%</td>
+  </tr>
+  <tr>
+    <td><strong>初始资金</strong></td>
+    <td>${self.initial_capital:,}</td>
+  </tr>
+</table>
+
+<h3>📋 仓位配置</h3>
 <table>
   <tr>
     <th>仓位</th>
