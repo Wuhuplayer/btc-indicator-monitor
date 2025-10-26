@@ -69,7 +69,7 @@ def _smtp_try_send(msg, cfg):
     try:
         with smtplib.SMTP_SSL(cfg['smtp_server'], 465, timeout=20) as server:
             server.login(cfg['sender_email'], cfg['sender_password'])
-            server.send_message(msg)
+            server.sendmail(cfg['sender_email'], [cfg['receiver_email']], msg.as_string())
         return True, None
     except Exception as e_ssl:
         # 方式2: STARTTLS 587
@@ -78,7 +78,7 @@ def _smtp_try_send(msg, cfg):
                 server.ehlo()
                 server.starttls()
                 server.login(cfg['sender_email'], cfg['sender_password'])
-                server.send_message(msg)
+                server.sendmail(cfg['sender_email'], [cfg['receiver_email']], msg.as_string())
             return True, None
         except Exception as e_tls:
             return False, f"SSL:{e_ssl} | STARTTLS:{e_tls}"
