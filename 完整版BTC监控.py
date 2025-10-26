@@ -111,16 +111,24 @@ class BTCIndicatorMonitor:
             
             msg.attach(MIMEText(html_body, 'html'))
             
-            # 发送邮件（QQ邮箱使用SSL）
+            # 发送邮件（QQ邮箱使用SSL，修复QUIT异常）
             if 'qq.com' in self.email_config['smtp_server']:
-                with smtplib.SMTP_SSL(self.email_config['smtp_server'], 465) as server:
-                    server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                    server.send_message(msg)
+                server = smtplib.SMTP_SSL(self.email_config['smtp_server'], 465, timeout=30)
+                server.login(self.email_config['sender_email'], self.email_config['sender_password'])
+                server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
+                try:
+                    server.quit()
+                except:
+                    pass  # 忽略QQ SMTP的QUIT异常
             else:
-                with smtplib.SMTP(self.email_config['smtp_server'], self.email_config['smtp_port']) as server:
-                    server.starttls()
-                    server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                    server.send_message(msg)
+                server = smtplib.SMTP(self.email_config['smtp_server'], self.email_config['smtp_port'], timeout=30)
+                server.starttls()
+                server.login(self.email_config['sender_email'], self.email_config['sender_password'])
+                server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
+                try:
+                    server.quit()
+                except:
+                    pass
             
             print(f"✅ 邮件已发送: {subject}")
             return True
