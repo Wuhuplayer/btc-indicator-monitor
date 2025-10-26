@@ -31,7 +31,7 @@ jobs:
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: |
-          python3 "无TA-Lib版本.py"
+          python3 send_report_min.py
       
       - name: 发送结果
         if: always()
