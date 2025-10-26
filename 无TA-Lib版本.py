@@ -7,6 +7,7 @@
 import pandas as pd
 import numpy as np
 import requests
+import time
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -14,16 +15,52 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 def get_btc_price():
-    """获取当前BTC价格"""
+    """获取当前BTC价格（多数据源+重试）"""
+    errors = []
+
+    # 数据源1：Binance
+    for attempt in range(2):
+        try:
+            url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+            resp = requests.get(url, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                price = float(data.get('price'))
+                print(f"✅ Binance 价格: ${price:,.2f}")
+                return price
+            errors.append(f"Binance HTTP {resp.status_code}")
+        except Exception as e:
+            errors.append(f"Binance 错误: {e}")
+        time.sleep(1)
+
+    # 数据源2：Coinbase
     try:
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            return float(data['price'])
-        return None
-    except:
-        return None
+        url = "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+        resp = requests.get(url, timeout=10, headers={"Accept": "application/json"})
+        if resp.status_code == 200:
+            data = resp.json()
+            price = float(data['data']['amount'])
+            print(f"✅ Coinbase 价格: ${price:,.2f}")
+            return price
+        errors.append(f"Coinbase HTTP {resp.status_code}")
+    except Exception as e:
+        errors.append(f"Coinbase 错误: {e}")
+
+    # 数据源3：Coingecko
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            price = float(data['bitcoin']['usd'])
+            print(f"✅ Coingecko 价格: ${price:,.2f}")
+            return price
+        errors.append(f"Coingecko HTTP {resp.status_code}")
+    except Exception as e:
+        errors.append(f"Coingecko 错误: {e}")
+
+    print("❌ 获取价格失败: " + " | ".join(errors))
+    return None
 
 def send_email(subject, body):
     """发送邮件"""
@@ -59,8 +96,23 @@ def main():
     # 获取当前价格
     price = get_btc_price()
     if price is None:
-        print("❌ 获取价格失败")
-        return False
+        # 价格获取失败也发送诊断邮件
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        diag_html = f"""
+        <html>
+        <body>
+            <h2>⚠️ BTC监控诊断报告</h2>
+            <p>未能获取到实时价格，可能为临时网络或数据源限制。</p>
+            <ul>
+                <li>时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</li>
+                <li>数据源: Binance/Coinbase/Coingecko 均失败</li>
+            </ul>
+            <p>系统仍然正常运行，稍后将自动重试。</p>
+        </body>
+        </html>
+        """
+        sent = send_email(f"BTC监控日报 {current_date}（诊断）", diag_html)
+        return bool(sent)
     
     print(f"💰 当前BTC价格: ${price:,.0f}")
     
