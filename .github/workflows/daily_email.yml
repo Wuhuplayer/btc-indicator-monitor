@@ -42,6 +42,8 @@ jobs:
           pip install pandas numpy yfinance requests TA-Lib
       
       - name: 发送完整版BTC技术指标报告
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
           python3 "【邮箱提示】指标提醒.py"
       

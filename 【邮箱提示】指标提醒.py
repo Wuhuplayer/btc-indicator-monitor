@@ -72,20 +72,15 @@ class BTCIndicatorMonitor:
         self.enable_short = False  # 禁用做空
     
     def send_email(self, subject, body, is_alert=False):
-        """发送邮件 - 使用Gmail SMTP"""
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-        from email.header import Header
-        import ssl
+        """发送邮件 - 使用Resend API（GPT推荐方案）"""
+        import requests
         import os
         
-        print(f"🚀 使用QQ邮箱SMTP发送邮件...")
+        print(f"🚀 使用Resend API发送邮件...")
         
-        # QQ邮箱配置（直接使用，不依赖环境变量）
-        sender_email = "350980368@qq.com"
-        sender_password = "eudpnxcjdnlpcbcc"  # 您的QQ邮箱授权码
-        receiver_email = "350980368@qq.com"
+        # Resend API配置
+        api_key = os.getenv('RESEND_API_KEY', 're_test_key_placeholder')
+        api_url = "https://api.resend.com/emails"
         
         # 邮件标题
         if is_alert:
@@ -114,33 +109,40 @@ class BTCIndicatorMonitor:
         </html>
         """
         
-        # 创建邮件
-        msg = MIMEMultipart('alternative')
-        msg['From'] = f"BTC Monitor <{sender_email}>"
-        msg['To'] = receiver_email
-        msg['Subject'] = Header(email_subject, 'utf-8')
+        # Resend邮件数据
+        email_data = {
+            "from": "BTC Monitor <btcmonitor@resend.dev>",
+            "to": ["350980368@qq.com"],
+            "subject": email_subject,
+            "html": html_content
+        }
         
-        # 添加HTML内容
-        html_part = MIMEText(html_content, 'html', 'utf-8')
-        msg.attach(html_part)
+        # 发送请求
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
         
         try:
-            print(f"📧 发送邮件到: {receiver_email}")
+            print(f"📧 发送邮件到: 350980368@qq.com")
             print(f"📧 邮件主题: {email_subject}")
+            print(f"📧 使用Resend API...")
             
-            # 使用QQ邮箱SMTP
-            print("🔐 使用QQ邮箱SMTP...")
-            context = ssl.create_default_context()
-            with smtplib.SMTP_SSL("smtp.qq.com", 465, context=context, timeout=30) as server:
-                server.set_debuglevel(1)  # 开启调试
-                server.login(sender_email, sender_password)
-                server.send_message(msg)
-                print("✅ QQ邮箱发送成功!")
+            response = requests.post(api_url, headers=headers, json=email_data, timeout=30)
+            
+            print(f"📧 API响应状态: {response.status_code}")
+            print(f"📧 API响应内容: {response.text}")
+            
+            if response.status_code == 200:
+                print("✅ Resend邮件发送成功!")
                 print("📧 请检查邮箱: 350980368@qq.com")
                 return True
+            else:
+                print(f"❌ Resend发送失败: {response.text}")
+                return False
                 
         except Exception as e:
-            print(f"❌ QQ邮箱发送失败: {e}")
+            print(f"❌ Resend API请求失败: {e}")
             return False
     
     def check_entry_signals_detailed(self, row):
