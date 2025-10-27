@@ -1586,7 +1586,7 @@ class BTCIndicatorMonitor:
         
         # ATR追踪
         atr_val = row.get('atr', 0)
-        atr_mult = 2.1  # 动态倍数
+        atr_mult = self.atr_mult  # 使用类属性中的倍数
         atr_trail = row['close'] - (atr_val * atr_mult)
         atr_distance = row['close'] - atr_trail
         atr_distance_pct = (atr_distance / row['close']) * 100
