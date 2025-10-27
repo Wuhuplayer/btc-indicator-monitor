@@ -1325,7 +1325,7 @@ class BTCIndicatorMonitor:
   </tr>
   <tr>
     <td><strong>挤压动能柱</strong></td>
-    <td style="color: {'#00ff00' if row.get('is_lime') else 'green' if row.get('is_green') else 'red' if row.get('is_red') else 'maroon'}; font-weight: bold;">{'绿色' if row.get('is_lime') or row.get('is_green') else '红色'}</td>
+    <td style="color: {'#00ff00' if row.get('is_lime') else 'green' if row.get('is_green') else 'red' if row.get('is_red') else 'maroon'}; font-weight: bold;">{'强多柱(青绿)' if row.get('is_lime') else '弱多柱(深绿)' if row.get('is_green') else '强空柱(红色)' if row.get('is_red') else '弱空柱(暗红)'}</td>
     <td>动能向上</td>
   </tr>
 </table>
