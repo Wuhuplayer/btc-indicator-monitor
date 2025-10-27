@@ -2521,9 +2521,9 @@ class BTCIndicatorMonitor:
 if __name__ == "__main__":
     # 配置邮箱 - 支持环境变量和默认值
     email_config = {
-        'smtp_server': 'smtp.qq.com',  # QQ邮箱服务器
+        'smtp_server': 'smtp.gmail.com',  # Gmail服务器
         'smtp_port': 587,
-        'sender_email': os.getenv('SENDER_EMAIL', '350980368@qq.com'),  # 从环境变量获取
+        'sender_email': os.getenv('SENDER_EMAIL', '350980368@gmail.com'),  # 从环境变量获取
         'sender_password': os.getenv('EMAIL_PASSWORD', 'dvclkoinlmnebjdi'),   # 从环境变量获取
         'receiver_email': os.getenv('RECEIVER_EMAIL', '350980368@qq.com')    # 从环境变量获取
     }
