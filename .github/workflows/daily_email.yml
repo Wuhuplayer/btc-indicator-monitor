@@ -42,8 +42,6 @@ jobs:
           pip install pandas numpy yfinance requests TA-Lib
       
       - name: 发送完整版BTC技术指标报告
-        env:
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: |
           python3 "【邮箱提示】指标提醒.py"
       

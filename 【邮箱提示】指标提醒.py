@@ -80,12 +80,12 @@ class BTCIndicatorMonitor:
         import ssl
         import os
         
-        print(f"🚀 使用Gmail SMTP发送邮件...")
+        print(f"🚀 使用QQ邮箱SMTP发送邮件...")
         
-        # Gmail配置
-        sender_email = "gjh350980368@gmail.com"
-        sender_password = os.getenv('GMAIL_APP_PASSWORD', 'your_app_password_here')
-        receiver_email = "350980368@qq.com"  # 发送到您的QQ邮箱
+        # QQ邮箱配置（直接使用，不依赖环境变量）
+        sender_email = "350980368@qq.com"
+        sender_password = "eudpnxcjdnlpcbcc"  # 您的QQ邮箱授权码
+        receiver_email = "350980368@qq.com"
         
         # 邮件标题
         if is_alert:
@@ -128,19 +128,19 @@ class BTCIndicatorMonitor:
             print(f"📧 发送邮件到: {receiver_email}")
             print(f"📧 邮件主题: {email_subject}")
             
-            # 使用Gmail SMTP
-            print("🔐 使用Gmail SMTP...")
+            # 使用QQ邮箱SMTP
+            print("🔐 使用QQ邮箱SMTP...")
             context = ssl.create_default_context()
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context, timeout=30) as server:
+            with smtplib.SMTP_SSL("smtp.qq.com", 465, context=context, timeout=30) as server:
                 server.set_debuglevel(1)  # 开启调试
                 server.login(sender_email, sender_password)
                 server.send_message(msg)
-                print("✅ Gmail邮件发送成功!")
+                print("✅ QQ邮箱发送成功!")
                 print("📧 请检查邮箱: 350980368@qq.com")
                 return True
                 
         except Exception as e:
-            print(f"❌ Gmail发送失败: {e}")
+            print(f"❌ QQ邮箱发送失败: {e}")
             return False
     
     def check_entry_signals_detailed(self, row):
