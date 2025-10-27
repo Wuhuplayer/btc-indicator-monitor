@@ -72,65 +72,75 @@ class BTCIndicatorMonitor:
         self.enable_short = False  # 禁用做空
     
     def send_email(self, subject, body, is_alert=False):
-        """发送通知 - 使用Telegram Bot（最简单方案）"""
-        import requests
+        """发送邮件 - 使用Gmail SMTP"""
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        from email.header import Header
+        import ssl
         import os
         
-        print(f"🚀 使用Telegram Bot发送通知...")
+        print(f"🚀 使用Gmail SMTP发送邮件...")
         
-        # Telegram Bot配置
-        bot_token = os.getenv('TELEGRAM_BOT_TOKEN', '1234567890:ABCdefGHIjklMNOpqrsTUVwxyz')
-        chat_id = os.getenv('TELEGRAM_CHAT_ID', '123456789')
-        api_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        # Gmail配置
+        sender_email = "gjh350980368@gmail.com"
+        sender_password = os.getenv('GMAIL_APP_PASSWORD', 'your_app_password_here')
+        receiver_email = "350980368@qq.com"  # 发送到您的QQ邮箱
         
-        # 消息标题
+        # 邮件标题
         if is_alert:
-            message_title = f"🚨 {subject}"
+            email_subject = f"🚨 {subject}"
         else:
-            message_title = f"📊 {subject}"
+            email_subject = f"📊 {subject}"
         
-        # 简化HTML内容为纯文本
-        import re
-        # 移除HTML标签，保留文本内容
-        text_content = re.sub(r'<[^>]+>', '', body)
-        text_content = re.sub(r'\s+', ' ', text_content)  # 压缩多余空格
-        
-        # 构建消息
-        message = f"""
-{message_title}
-
-{text_content[:2000]}  # Telegram消息限制4000字符，这里限制2000
-
-📧 完整报告请查看GitHub Actions日志
-🔗 https://github.com/Wuhuplayer/btc-indicator-monitor/actions
+        # HTML邮件内容
+        html_content = f"""
+        <html>
+        <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; }}
+            table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
+            th {{ background-color: #4CAF50; color: white; padding: 10px; text-align: left; }}
+            td {{ border: 1px solid #ddd; padding: 8px; }}
+            tr:nth-child(even) {{ background-color: #f2f2f2; }}
+            .alert {{ background-color: #fff3cd; padding: 15px; margin: 10px 0; border-left: 5px solid #ff9800; }}
+            .danger {{ background-color: #ffebee; padding: 15px; margin: 10px 0; border-left: 5px solid #f44336; }}
+            .success {{ background-color: #e8f5e9; padding: 15px; margin: 10px 0; border-left: 5px solid #4CAF50; }}
+        </style>
+        </head>
+        <body>
+            {body}
+        </body>
+        </html>
         """
         
-        # 发送请求
-        data = {
-            'chat_id': chat_id,
-            'text': message,
-            'parse_mode': 'HTML'
-        }
+        # 创建邮件
+        msg = MIMEMultipart('alternative')
+        msg['From'] = f"BTC Monitor <{sender_email}>"
+        msg['To'] = receiver_email
+        msg['Subject'] = Header(email_subject, 'utf-8')
+        
+        # 添加HTML内容
+        html_part = MIMEText(html_content, 'html', 'utf-8')
+        msg.attach(html_part)
         
         try:
-            print(f"📱 发送Telegram消息到: {chat_id}")
-            print(f"📱 消息主题: {message_title}")
+            print(f"📧 发送邮件到: {receiver_email}")
+            print(f"📧 邮件主题: {email_subject}")
             
-            response = requests.post(api_url, data=data, timeout=30)
-            
-            print(f"📱 API响应状态: {response.status_code}")
-            print(f"📱 API响应内容: {response.text}")
-            
-            if response.status_code == 200:
-                print("✅ Telegram消息发送成功!")
-                print("📱 请检查Telegram聊天")
+            # 使用Gmail SMTP
+            print("🔐 使用Gmail SMTP...")
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context, timeout=30) as server:
+                server.set_debuglevel(1)  # 开启调试
+                server.login(sender_email, sender_password)
+                server.send_message(msg)
+                print("✅ Gmail邮件发送成功!")
+                print("📧 请检查邮箱: 350980368@qq.com")
                 return True
-            else:
-                print(f"❌ Telegram发送失败: {response.text}")
-                return False
                 
         except Exception as e:
-            print(f"❌ Telegram API请求失败: {e}")
+            print(f"❌ Gmail发送失败: {e}")
             return False
     
     def check_entry_signals_detailed(self, row):
