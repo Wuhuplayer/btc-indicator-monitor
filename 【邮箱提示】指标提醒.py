@@ -2554,7 +2554,7 @@ if __name__ == "__main__":
             'smtp_server': 'smtp.qq.com',
             'smtp_port': 587,
             'sender_email': os.getenv('SENDER_EMAIL', '350980368@qq.com'),
-            'sender_password': os.getenv('EMAIL_PASSWORD', 'dvclkoinlmnebjdi'),
+            'sender_password': os.getenv('EMAIL_PASSWORD', 'eudpnxcjdnlpcbcc'),
             'receiver_email': os.getenv('RECEIVER_EMAIL', '350980368@qq.com')
         }
         print(f"🔧 GitHub Actions环境，使用环境变量")
@@ -2564,7 +2564,7 @@ if __name__ == "__main__":
             'smtp_server': 'smtp.qq.com',
             'smtp_port': 587,
             'sender_email': '350980368@qq.com',
-            'sender_password': 'dvclkoinlmnebjdi',
+            'sender_password': 'eudpnxcjdnlpcbcc',
             'receiver_email': '350980368@qq.com'
         }
         print(f"🔧 本地环境，使用默认配置")
