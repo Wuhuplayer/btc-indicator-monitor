@@ -43,7 +43,8 @@ jobs:
       
       - name: 发送完整版BTC技术指标报告
         env:
-          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python3 "【邮箱提示】指标提醒.py"
       
