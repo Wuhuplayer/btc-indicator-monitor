@@ -72,6 +72,13 @@ class BTCIndicatorMonitor:
     
     def send_email(self, subject, body, is_alert=False):
         """发送邮件 - HTML表格版本"""
+        # 调试信息
+        print(f"🔍 调试信息:")
+        print(f"   email_config: {self.email_config}")
+        print(f"   sender_email: {self.email_config.get('sender_email') if self.email_config else 'None'}")
+        print(f"   sender_password: {'已设置' if self.email_config and self.email_config.get('sender_password') else '未设置'}")
+        print(f"   receiver_email: {self.email_config.get('receiver_email') if self.email_config else 'None'}")
+        
         if not self.email_config or not self.email_config.get('sender_email'):
             print(f"⚠️ 邮箱未配置，跳过发送: {subject}")
             return False
