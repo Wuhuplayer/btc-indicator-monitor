@@ -72,103 +72,73 @@ class BTCIndicatorMonitor:
         self.enable_short = False  # 禁用做空
     
     def send_email(self, subject, body, is_alert=False):
-        """发送邮件 - HTML表格版本"""
-        # 调试信息
-        print(f"🔍 调试信息:")
-        print(f"   email_config: {self.email_config}")
-        print(f"   sender_email: {self.email_config.get('sender_email') if self.email_config else 'None'}")
-        print(f"   sender_password: {'已设置' if self.email_config and self.email_config.get('sender_password') else '未设置'}")
-        print(f"   receiver_email: {self.email_config.get('receiver_email') if self.email_config else 'None'}")
+        """发送邮件 - 使用Resend API"""
+        print(f"🚀 使用Resend API发送邮件...")
         
-        if not self.email_config or not self.email_config.get('sender_email'):
-            print(f"⚠️ 邮箱未配置，跳过发送: {subject}")
-            return False
+        # Resend API配置
+        api_key = "re_1234567890abcdef"  # 临时测试密钥
+        api_url = "https://api.resend.com/emails"
+        
+        # 邮件标题
+        if is_alert:
+            email_subject = f"🚨 {subject}"
+        else:
+            email_subject = f"📊 {subject}"
+        
+        # HTML邮件内容
+        html_content = f"""
+        <html>
+        <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; }}
+            table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
+            th {{ background-color: #4CAF50; color: white; padding: 10px; text-align: left; }}
+            td {{ border: 1px solid #ddd; padding: 8px; }}
+            tr:nth-child(even) {{ background-color: #f2f2f2; }}
+            .alert {{ background-color: #fff3cd; padding: 15px; margin: 10px 0; border-left: 5px solid #ff9800; }}
+            .danger {{ background-color: #ffebee; padding: 15px; margin: 10px 0; border-left: 5px solid #f44336; }}
+            .success {{ background-color: #e8f5e9; padding: 15px; margin: 10px 0; border-left: 5px solid #4CAF50; }}
+        </style>
+        </head>
+        <body>
+            {body}
+        </body>
+        </html>
+        """
+        
+        # 邮件数据
+        email_data = {
+            "from": "BTC Monitor <btcmonitor@resend.dev>",
+            "to": ["350980368@qq.com"],
+            "subject": email_subject,
+            "html": html_content
+        }
+        
+        # 发送请求
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
         
         try:
-            # 创建邮件
-            msg = MIMEMultipart('alternative')
-            msg['From'] = self.email_config['sender_email']
-            msg['To'] = self.email_config['receiver_email']
+            print(f"📧 发送邮件到: 350980368@qq.com")
+            print(f"📧 邮件主题: {email_subject}")
             
-            # 如果是警报，标题更醒目
-            if is_alert:
-                msg['Subject'] = f"🚨 {subject}"
+            response = requests.post(api_url, headers=headers, json=email_data, timeout=30)
+            
+            print(f"📧 API响应状态: {response.status_code}")
+            print(f"📧 API响应内容: {response.text}")
+            
+            if response.status_code == 200:
+                print(f"✅ 邮件发送成功!")
+                print(f"📧 请检查邮箱: 350980368@qq.com")
+                return True
             else:
-                msg['Subject'] = f"📊 {subject}"
-            
-            # HTML格式邮件
-            html_body = f"""
-            <html>
-            <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; }}
-                table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
-                th {{ background-color: #4CAF50; color: white; padding: 10px; text-align: left; }}
-                td {{ border: 1px solid #ddd; padding: 8px; }}
-                tr:nth-child(even) {{ background-color: #f2f2f2; }}
-                .alert {{ background-color: #fff3cd; padding: 15px; margin: 10px 0; border-left: 5px solid #ff9800; }}
-                .danger {{ background-color: #ffebee; padding: 15px; margin: 10px 0; border-left: 5px solid #f44336; }}
-                .success {{ background-color: #e8f5e9; padding: 15px; margin: 10px 0; border-left: 5px solid #4CAF50; }}
-            </style>
-            </head>
-            <body>
-                {body}
-            </body>
-            </html>
-            """
-            
-            msg.attach(MIMEText(html_body, 'html'))
-            
-            # 发送邮件（强制QQ邮箱SSL连接）
-            print(f"📧 强制使用QQ邮箱SSL发送邮件到: {self.email_config['receiver_email']}")
-            
-            # 强制使用SSL连接
-            server = smtplib.SMTP_SSL(self.email_config['smtp_server'], 465, timeout=60)
-            server.set_debuglevel(1)  # 开启调试信息
-            server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-            print(f"📧 SSL登录成功，开始发送邮件...")
-            
-            # 添加邮件头信息，提高送达率
-            msg['X-Mailer'] = 'BTC-Monitor-System'
-            msg['X-Priority'] = '3'
-            msg['X-Originating-IP'] = '[127.0.0.1]'
-            msg['Message-ID'] = f"<{int(time.time())}@btc-monitor.com>"
-            
-            result = server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
-            print(f"📧 邮件发送结果: {result}")
-            print(f"📧 发送者: {self.email_config['sender_email']}")
-            print(f"📧 接收者: {self.email_config['receiver_email']}")
-            print(f"📧 邮件主题: {msg['Subject']}")
-            print(f"📧 邮件大小: {len(msg.as_string())} 字节")
-            
-            try:
-                server.quit()
-                print(f"📧 SMTP连接已关闭")
-            except:
-                pass  # 忽略QQ SMTP的QUIT异常
-            else:
-                print(f"📧 使用其他邮箱发送邮件到: {self.email_config['receiver_email']}")
-                server = smtplib.SMTP(self.email_config['smtp_server'], self.email_config['smtp_port'], timeout=30)
-                server.starttls()
-                server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                print(f"📧 登录成功，开始发送邮件...")
+                print(f"❌ 邮件发送失败: {response.text}")
+                return False
                 
-                result = server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
-                print(f"📧 邮件发送结果: {result}")
-                
-                try:
-                    server.quit()
-                    print(f"📧 SMTP连接已关闭")
-                except:
-                    pass
-            
-            print(f"✅ 邮件已发送: {subject}")
-            print(f"📧 请检查邮箱: {self.email_config['receiver_email']}")
-            print(f"📧 如果没收到，请检查垃圾邮件文件夹")
-            return True
-            
         except Exception as e:
-            print(f"❌ 邮件发送失败: {e}")
+            print(f"❌ API请求失败: {e}")
             return False
     
     def check_entry_signals_detailed(self, row):
