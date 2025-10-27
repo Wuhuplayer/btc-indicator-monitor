@@ -1233,30 +1233,30 @@ class BTCIndicatorMonitor:
             high_priority_signals = [s for s in entry_signals if s['urgency'] == 'high']
             medium_priority_signals = [s for s in entry_signals if s['urgency'] == 'medium']
             
-            # 获取运行ID
-            run_id = os.getenv('GITHUB_RUN_ID', '本地')
+            # 获取运行编号
+            run_number = os.getenv('GITHUB_RUN_NUMBER', '本地')
             
             if high_priority_signals:
                 # 第1仓信号：最高优先级
-                subject = f"🚨【紧急买入信号】第1仓可买入！BTC监控日报 {current_date} - Run {run_id}"
+                subject = f"🚨【紧急买入信号】第1仓可买入！BTC监控日报 {current_date} - Run {run_number}"
                 is_alert = True
             elif medium_priority_signals:
                 # 第2-4仓信号：中等优先级
                 signal_levels = [s['level'] for s in medium_priority_signals]
                 levels_str = "、".join([f"第{level}仓" for level in signal_levels])
-                subject = f"⚠️【买入信号】{levels_str}可加仓！BTC监控日报 {current_date} - Run {run_id}"
+                subject = f"⚠️【买入信号】{levels_str}可加仓！BTC监控日报 {current_date} - Run {run_number}"
                 is_alert = True
             else:
                 # 低优先级信号
                 signal_levels = [s['level'] for s in entry_signals]
                 levels_str = "、".join([f"第{level}仓" for level in signal_levels])
-                subject = f"📈【买入信号】{levels_str}可考虑！BTC监控日报 {current_date} - Run {run_id}"
+                subject = f"📈【买入信号】{levels_str}可考虑！BTC监控日报 {current_date} - Run {run_number}"
                 is_alert = False
         else:
             # 无买入信号
-            # 获取运行ID
-            run_id = os.getenv('GITHUB_RUN_ID', '本地')
-            subject = f"📊 BTC监控日报 {current_date} - Run {run_id}"
+            # 获取运行编号
+            run_number = os.getenv('GITHUB_RUN_NUMBER', '本地')
+            subject = f"📊 BTC监控日报 {current_date} - Run {run_number}"
             is_alert = False
         
         # 发送每日报告
