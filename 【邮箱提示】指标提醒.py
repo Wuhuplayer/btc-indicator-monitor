@@ -519,6 +519,13 @@ class BTCIndicatorMonitor:
         # ATR用于追踪止盈
         df['atr'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
         
+        # 调试ATR计算
+        print(f"🔍 ATR调试信息:")
+        print(f"   数据长度: {len(df)}")
+        print(f"   最近ATR值: {df['atr'].iloc[-1]:.2f}")
+        print(f"   ATR非空值数量: {df['atr'].notna().sum()}")
+        print(f"   ATR非零值数量: {(df['atr'] > 0).sum()}")
+        
         # 计算信号 - 按照TV代码实现
         # TV代码：wtGoldenCross = (wt1[1] < wt2[1]) and (wt1 > wt2)
         df['wt_golden_cross'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
@@ -2512,7 +2519,7 @@ if __name__ == "__main__":
         'smtp_server': 'smtp.qq.com',  # QQ邮箱服务器
         'smtp_port': 587,
         'sender_email': os.getenv('SENDER_EMAIL', '350980368@qq.com'),  # 从环境变量获取
-        'sender_password': os.getenv('EMAIL_PASSWORD', 'vortuxxxhkgubidh'),   # 从环境变量获取
+        'sender_password': os.getenv('EMAIL_PASSWORD', 'dvclkoinlmnebjdi'),   # 从环境变量获取
         'receiver_email': os.getenv('RECEIVER_EMAIL', '350980368@qq.com')    # 从环境变量获取
     }
     
