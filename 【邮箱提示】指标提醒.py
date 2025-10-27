@@ -29,6 +29,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import talib
+import time
 from datetime import datetime, timedelta
 import warnings
 import smtplib
@@ -118,61 +119,33 @@ class BTCIndicatorMonitor:
             
             msg.attach(MIMEText(html_body, 'html'))
             
-            # 发送邮件（QQ邮箱使用SSL，修复QUIT异常）
-            if 'qq.com' in self.email_config['smtp_server']:
-                print(f"📧 使用QQ邮箱发送邮件到: {self.email_config['receiver_email']}")
-                
-                # 尝试SSL连接（端口465）
-                try:
-                    server = smtplib.SMTP_SSL(self.email_config['smtp_server'], 465, timeout=30)
-                    server.set_debuglevel(0)  # 关闭调试信息
-                    server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                    print(f"📧 SSL登录成功，开始发送邮件...")
-                    
-                    # 添加邮件头信息，提高送达率
-                    msg['X-Mailer'] = 'BTC-Monitor-System'
-                    msg['X-Priority'] = '3'
-                    msg['X-Originating-IP'] = '[127.0.0.1]'
-                    
-                    result = server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
-                    print(f"📧 邮件发送结果: {result}")
-                    print(f"📧 发送者: {self.email_config['sender_email']}")
-                    print(f"📧 接收者: {self.email_config['receiver_email']}")
-                    print(f"📧 邮件主题: {msg['Subject']}")
-                    print(f"📧 邮件大小: {len(msg.as_string())} 字节")
-                    
-                    try:
-                        server.quit()
-                        print(f"📧 SMTP连接已关闭")
-                    except:
-                        pass  # 忽略QQ SMTP的QUIT异常
-                        
-                except Exception as e:
-                    print(f"📧 SSL连接失败: {e}")
-                    # 尝试TLS连接（端口587）
-                    try:
-                        server = smtplib.SMTP(self.email_config['smtp_server'], 587, timeout=30)
-                        server.starttls()
-                        server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                        print(f"📧 TLS登录成功，开始发送邮件...")
-                        
-                        # 添加邮件头信息，提高送达率
-                        msg['X-Mailer'] = 'BTC-Monitor-System'
-                        msg['X-Priority'] = '3'
-                        msg['X-Originating-IP'] = '[127.0.0.1]'
-                        
-                        result = server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
-                        print(f"📧 邮件发送结果: {result}")
-                        
-                        try:
-                            server.quit()
-                            print(f"📧 SMTP连接已关闭")
-                        except:
-                            pass  # 忽略QQ SMTP的QUIT异常
-                            
-                    except Exception as e2:
-                        print(f"📧 TLS连接也失败: {e2}")
-                        raise e2
+            # 发送邮件（强制QQ邮箱SSL连接）
+            print(f"📧 强制使用QQ邮箱SSL发送邮件到: {self.email_config['receiver_email']}")
+            
+            # 强制使用SSL连接
+            server = smtplib.SMTP_SSL(self.email_config['smtp_server'], 465, timeout=60)
+            server.set_debuglevel(1)  # 开启调试信息
+            server.login(self.email_config['sender_email'], self.email_config['sender_password'])
+            print(f"📧 SSL登录成功，开始发送邮件...")
+            
+            # 添加邮件头信息，提高送达率
+            msg['X-Mailer'] = 'BTC-Monitor-System'
+            msg['X-Priority'] = '3'
+            msg['X-Originating-IP'] = '[127.0.0.1]'
+            msg['Message-ID'] = f"<{int(time.time())}@btc-monitor.com>"
+            
+            result = server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
+            print(f"📧 邮件发送结果: {result}")
+            print(f"📧 发送者: {self.email_config['sender_email']}")
+            print(f"📧 接收者: {self.email_config['receiver_email']}")
+            print(f"📧 邮件主题: {msg['Subject']}")
+            print(f"📧 邮件大小: {len(msg.as_string())} 字节")
+            
+            try:
+                server.quit()
+                print(f"📧 SMTP连接已关闭")
+            except:
+                pass  # 忽略QQ SMTP的QUIT异常
             else:
                 print(f"📧 使用其他邮箱发送邮件到: {self.email_config['receiver_email']}")
                 server = smtplib.SMTP(self.email_config['smtp_server'], self.email_config['smtp_port'], timeout=30)
@@ -2553,12 +2526,12 @@ if __name__ == "__main__":
     # 配置邮箱 - 支持环境变量和默认值
     # 检查是否在GitHub Actions环境中
     if os.getenv('GITHUB_ACTIONS'):
-        # GitHub Actions环境，使用Gmail测试
+        # GitHub Actions环境，强制使用QQ邮箱
         email_config = {
-            'smtp_server': 'smtp.gmail.com',
-            'smtp_port': 587,
-            'sender_email': 'btcmonitor2024@gmail.com',
-            'sender_password': 'btcmonitor2024!',
+            'smtp_server': 'smtp.qq.com',
+            'smtp_port': 465,  # 使用SSL端口
+            'sender_email': '350980368@qq.com',
+            'sender_password': 'eudpnxcjdnlpcbcc',
             'receiver_email': '350980368@qq.com'
         }
         print(f"🔧 GitHub Actions环境，使用环境变量")
