@@ -111,23 +111,16 @@ class BTCIndicatorMonitor:
             
             msg.attach(MIMEText(html_body, 'html'))
             
-            # 发送邮件（QQ邮箱使用SSL，修复QUIT异常）
-            if 'qq.com' in self.email_config['smtp_server']:
-                print(f"📧 使用QQ邮箱发送邮件到: {self.email_config['receiver_email']}")
-                
-                # 尝试SSL连接
-                try:
-                    server = smtplib.SMTP_SSL(self.email_config['smtp_server'], 465, timeout=30)
-                    server.set_debuglevel(0)  # 关闭调试信息
-                    server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                    print(f"📧 SSL登录成功，开始发送邮件...")
-                except Exception as e:
-                    print(f"📧 SSL连接失败: {e}")
-                    # 尝试TLS连接
-                    server = smtplib.SMTP(self.email_config['smtp_server'], 587, timeout=30)
-                    server.starttls()
-                    server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                    print(f"📧 TLS登录成功，开始发送邮件...")
+        # 发送邮件（QQ邮箱使用SSL，修复QUIT异常）
+        if 'qq.com' in self.email_config['smtp_server']:
+            print(f"📧 使用QQ邮箱发送邮件到: {self.email_config['receiver_email']}")
+            
+            # 尝试SSL连接（端口465）
+            try:
+                server = smtplib.SMTP_SSL(self.email_config['smtp_server'], 465, timeout=30)
+                server.set_debuglevel(0)  # 关闭调试信息
+                server.login(self.email_config['sender_email'], self.email_config['sender_password'])
+                print(f"📧 SSL登录成功，开始发送邮件...")
                 
                 # 添加邮件头信息，提高送达率
                 msg['X-Mailer'] = 'BTC-Monitor-System'
@@ -142,6 +135,33 @@ class BTCIndicatorMonitor:
                     print(f"📧 SMTP连接已关闭")
                 except:
                     pass  # 忽略QQ SMTP的QUIT异常
+                    
+            except Exception as e:
+                print(f"📧 SSL连接失败: {e}")
+                # 尝试TLS连接（端口587）
+                try:
+                    server = smtplib.SMTP(self.email_config['smtp_server'], 587, timeout=30)
+                    server.starttls()
+                    server.login(self.email_config['sender_email'], self.email_config['sender_password'])
+                    print(f"📧 TLS登录成功，开始发送邮件...")
+                    
+                    # 添加邮件头信息，提高送达率
+                    msg['X-Mailer'] = 'BTC-Monitor-System'
+                    msg['X-Priority'] = '3'
+                    msg['X-Originating-IP'] = '[127.0.0.1]'
+                    
+                    result = server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
+                    print(f"📧 邮件发送结果: {result}")
+                    
+                    try:
+                        server.quit()
+                        print(f"📧 SMTP连接已关闭")
+                    except:
+                        pass  # 忽略QQ SMTP的QUIT异常
+                        
+                except Exception as e2:
+                    print(f"📧 TLS连接也失败: {e2}")
+                    raise e2
             else:
                 print(f"📧 使用其他邮箱发送邮件到: {self.email_config['receiver_email']}")
                 server = smtplib.SMTP(self.email_config['smtp_server'], self.email_config['smtp_port'], timeout=30)
@@ -2521,9 +2541,9 @@ class BTCIndicatorMonitor:
 if __name__ == "__main__":
     # 配置邮箱 - 支持环境变量和默认值
     email_config = {
-        'smtp_server': 'smtp.gmail.com',  # Gmail服务器
+        'smtp_server': 'smtp.qq.com',  # QQ邮箱服务器
         'smtp_port': 587,
-        'sender_email': os.getenv('SENDER_EMAIL', '350980368@gmail.com'),  # 从环境变量获取
+        'sender_email': os.getenv('SENDER_EMAIL', '350980368@qq.com'),  # 从环境变量获取
         'sender_password': os.getenv('EMAIL_PASSWORD', 'dvclkoinlmnebjdi'),   # 从环境变量获取
         'receiver_email': os.getenv('RECEIVER_EMAIL', '350980368@qq.com')    # 从环境变量获取
     }
