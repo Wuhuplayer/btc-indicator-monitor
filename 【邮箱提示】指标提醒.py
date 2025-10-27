@@ -2547,13 +2547,27 @@ class BTCIndicatorMonitor:
 
 if __name__ == "__main__":
     # 配置邮箱 - 支持环境变量和默认值
-    email_config = {
-        'smtp_server': 'smtp.qq.com',  # QQ邮箱服务器
-        'smtp_port': 587,
-        'sender_email': os.getenv('SENDER_EMAIL', '350980368@qq.com'),  # 从环境变量获取
-        'sender_password': os.getenv('EMAIL_PASSWORD', 'dvclkoinlmnebjdi'),   # 从环境变量获取
-        'receiver_email': os.getenv('RECEIVER_EMAIL', '350980368@qq.com')    # 从环境变量获取
-    }
+    # 检查是否在GitHub Actions环境中
+    if os.getenv('GITHUB_ACTIONS'):
+        # GitHub Actions环境，使用环境变量
+        email_config = {
+            'smtp_server': 'smtp.qq.com',
+            'smtp_port': 587,
+            'sender_email': os.getenv('SENDER_EMAIL', '350980368@qq.com'),
+            'sender_password': os.getenv('EMAIL_PASSWORD', 'dvclkoinlmnebjdi'),
+            'receiver_email': os.getenv('RECEIVER_EMAIL', '350980368@qq.com')
+        }
+        print(f"🔧 GitHub Actions环境，使用环境变量")
+    else:
+        # 本地环境，使用默认值
+        email_config = {
+            'smtp_server': 'smtp.qq.com',
+            'smtp_port': 587,
+            'sender_email': '350980368@qq.com',
+            'sender_password': 'dvclkoinlmnebjdi',
+            'receiver_email': '350980368@qq.com'
+        }
+        print(f"🔧 本地环境，使用默认配置")
     
     # 创建监控系统
     monitor = BTCIndicatorMonitor(email_config)
