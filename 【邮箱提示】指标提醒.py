@@ -136,6 +136,10 @@ class BTCIndicatorMonitor:
                     
                     result = server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
                     print(f"📧 邮件发送结果: {result}")
+                    print(f"📧 发送者: {self.email_config['sender_email']}")
+                    print(f"📧 接收者: {self.email_config['receiver_email']}")
+                    print(f"📧 邮件主题: {msg['Subject']}")
+                    print(f"📧 邮件大小: {len(msg.as_string())} 字节")
                     
                     try:
                         server.quit()
