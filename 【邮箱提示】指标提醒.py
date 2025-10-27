@@ -162,21 +162,21 @@ class BTCIndicatorMonitor:
                 except Exception as e2:
                     print(f"📧 TLS连接也失败: {e2}")
                     raise e2
-            else:
-                print(f"📧 使用其他邮箱发送邮件到: {self.email_config['receiver_email']}")
-                server = smtplib.SMTP(self.email_config['smtp_server'], self.email_config['smtp_port'], timeout=30)
-                server.starttls()
-                server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-                print(f"📧 登录成功，开始发送邮件...")
-                
-                result = server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
-                print(f"📧 邮件发送结果: {result}")
-                
-                try:
-                    server.quit()
-                    print(f"📧 SMTP连接已关闭")
-                except:
-                    pass
+        else:
+            print(f"📧 使用其他邮箱发送邮件到: {self.email_config['receiver_email']}")
+            server = smtplib.SMTP(self.email_config['smtp_server'], self.email_config['smtp_port'], timeout=30)
+            server.starttls()
+            server.login(self.email_config['sender_email'], self.email_config['sender_password'])
+            print(f"📧 登录成功，开始发送邮件...")
+            
+            result = server.sendmail(self.email_config['sender_email'], [self.email_config['receiver_email']], msg.as_string())
+            print(f"📧 邮件发送结果: {result}")
+            
+            try:
+                server.quit()
+                print(f"📧 SMTP连接已关闭")
+            except:
+                pass
             
             print(f"✅ 邮件已发送: {subject}")
             print(f"📧 请检查邮箱: {self.email_config['receiver_email']}")
