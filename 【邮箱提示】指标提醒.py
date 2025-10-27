@@ -2553,13 +2553,13 @@ if __name__ == "__main__":
     # 配置邮箱 - 支持环境变量和默认值
     # 检查是否在GitHub Actions环境中
     if os.getenv('GITHUB_ACTIONS'):
-        # GitHub Actions环境，使用环境变量
+        # GitHub Actions环境，使用Gmail测试
         email_config = {
-            'smtp_server': 'smtp.qq.com',
+            'smtp_server': 'smtp.gmail.com',
             'smtp_port': 587,
-            'sender_email': os.getenv('SENDER_EMAIL', '350980368@qq.com'),
-            'sender_password': os.getenv('EMAIL_PASSWORD', 'eudpnxcjdnlpcbcc'),
-            'receiver_email': os.getenv('RECEIVER_EMAIL', '350980368@qq.com')
+            'sender_email': 'btcmonitor2024@gmail.com',
+            'sender_password': 'btcmonitor2024!',
+            'receiver_email': '350980368@qq.com'
         }
         print(f"🔧 GitHub Actions环境，使用环境变量")
     else:
