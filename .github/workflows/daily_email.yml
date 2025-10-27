@@ -43,9 +43,7 @@ jobs:
       
       - name: 发送完整版BTC技术指标报告
         env:
-          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-          RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
         run: |
           python3 "【邮箱提示】指标提醒.py"
       

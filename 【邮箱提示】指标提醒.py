@@ -72,19 +72,15 @@ class BTCIndicatorMonitor:
         self.enable_short = False  # 禁用做空
     
     def send_email(self, subject, body, is_alert=False):
-        """发送邮件 - 修复加密方式和端口匹配"""
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-        from email.header import Header
-        import ssl
+        """发送邮件 - 使用SendGrid API（最稳定方案）"""
+        import requests
+        import os
         
-        print(f"🚀 发送邮件...")
+        print(f"🚀 使用SendGrid API发送邮件...")
         
-        # 邮件配置
-        sender_email = "350980368@qq.com"
-        sender_password = "eudpnxcjdnlpcbcc"  # QQ邮箱授权码
-        receiver_email = "350980368@qq.com"
+        # SendGrid API配置
+        api_key = os.getenv('SENDGRID_API_KEY', 'SG.test_key_placeholder')
+        api_url = "https://api.sendgrid.com/v3/mail/send"
         
         # 邮件标题
         if is_alert:
@@ -113,64 +109,49 @@ class BTCIndicatorMonitor:
         </html>
         """
         
-        # 创建邮件
-        msg = MIMEMultipart('alternative')
-        msg['From'] = f"BTC Monitor <{sender_email}>"
-        msg['To'] = receiver_email
-        msg['Subject'] = Header(email_subject, 'utf-8')
+        # SendGrid邮件数据
+        email_data = {
+            "personalizations": [
+                {
+                    "to": [{"email": "350980368@qq.com", "name": "BTC监控用户"}],
+                    "subject": email_subject
+                }
+            ],
+            "from": {"email": "btcmonitor@sendgrid.net", "name": "BTC技术指标监控"},
+            "content": [
+                {
+                    "type": "text/html",
+                    "value": html_content
+                }
+            ]
+        }
         
-        # 添加HTML内容
-        html_part = MIMEText(html_content, 'html', 'utf-8')
-        msg.attach(html_part)
+        # 发送请求
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
         
         try:
-            print(f"📧 发送邮件到: {receiver_email}")
+            print(f"📧 发送邮件到: 350980368@qq.com")
             print(f"📧 邮件主题: {email_subject}")
+            print(f"📧 使用SendGrid API...")
             
-            # 方法1: 使用465端口 + SSL (推荐)
-            print("🔐 尝试方法1: 465端口 + SSL")
-            try:
-                context = ssl.create_default_context()
-                with smtplib.SMTP_SSL("smtp.qq.com", 465, context=context, timeout=30) as server:
-                    server.set_debuglevel(1)  # 开启调试
-                    server.login(sender_email, sender_password)
-                    server.send_message(msg)
-                    print("✅ 方法1成功: 465端口 + SSL")
-                    return True
-            except Exception as e1:
-                print(f"❌ 方法1失败: {e1}")
+            response = requests.post(api_url, headers=headers, json=email_data, timeout=30)
             
-            # 方法2: 使用587端口 + STARTTLS
-            print("🔐 尝试方法2: 587端口 + STARTTLS")
-            try:
-                with smtplib.SMTP("smtp.qq.com", 587, timeout=30) as server:
-                    server.set_debuglevel(1)  # 开启调试
-                    server.starttls()  # 启用TLS
-                    server.login(sender_email, sender_password)
-                    server.send_message(msg)
-                    print("✅ 方法2成功: 587端口 + STARTTLS")
-                    return True
-            except Exception as e2:
-                print(f"❌ 方法2失败: {e2}")
+            print(f"📧 API响应状态: {response.status_code}")
+            print(f"📧 API响应内容: {response.text}")
             
-            # 方法3: 使用25端口 (部分服务器支持)
-            print("🔐 尝试方法3: 25端口")
-            try:
-                with smtplib.SMTP("smtp.qq.com", 25, timeout=30) as server:
-                    server.set_debuglevel(1)  # 开启调试
-                    server.starttls()  # 启用TLS
-                    server.login(sender_email, sender_password)
-                    server.send_message(msg)
-                    print("✅ 方法3成功: 25端口")
-                    return True
-            except Exception as e3:
-                print(f"❌ 方法3失败: {e3}")
-            
-            print("❌ 所有方法都失败了")
-            return False
+            if response.status_code == 202:
+                print("✅ SendGrid邮件发送成功!")
+                print("📧 请检查邮箱: 350980368@qq.com")
+                return True
+            else:
+                print(f"❌ SendGrid发送失败: {response.text}")
+                return False
                 
         except Exception as e:
-            print(f"❌ 邮件发送失败: {e}")
+            print(f"❌ SendGrid API请求失败: {e}")
             return False
     
     def check_entry_signals_detailed(self, row):
